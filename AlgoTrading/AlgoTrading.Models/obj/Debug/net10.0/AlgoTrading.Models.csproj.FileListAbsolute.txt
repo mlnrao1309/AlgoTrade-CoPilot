@@ -8,4 +8,3 @@ D:\MyWorkspace\AlgoTrading\AlgoTrading.Models\obj\Debug\net10.0\refint\AlgoTradi
 D:\MyWorkspace\AlgoTrading\AlgoTrading.Models\obj\Debug\net10.0\AlgoTrading.Models.pdb
 D:\MyWorkspace\AlgoTrading\AlgoTrading.Models\obj\Debug\net10.0\ref\AlgoTrading.Models.dll
 D:\MyWorkspace\AlgoTrading\AlgoTrading.Models\obj\Debug\net10.0\AlgoTrading.Models.sourcelink.json
-D:\MyWorkspace\AlgoTrading\AlgoTrading.Models\obj\Debug\net10.0\AlgoTrad.5019F414.Up2Date
