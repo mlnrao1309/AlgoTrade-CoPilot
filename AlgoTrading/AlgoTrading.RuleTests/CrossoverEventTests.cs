@@ -3,7 +3,6 @@ using AlgoTrading.Models.Rules;
 internal sealed class CrossoverEventTests
 {
     private int assertionCount;
-
     internal int Run()
     {
         VerifyCurrentAndNextCandles();
@@ -20,7 +19,10 @@ internal sealed class CrossoverEventTests
     private void Assert(bool condition, string description)
     {
         assertionCount++;
-        if (!condition) throw new InvalidOperationException(description);
+        if (!condition)
+        {
+            throw new InvalidOperationException(description);
+        }
     }
 
     private void AssertNumber(double expected, double? actual, string description)
@@ -32,7 +34,7 @@ internal sealed class CrossoverEventTests
     {
         BoundRule rule = CrossoverTestData.CreateRule(CrossoverTestData.CloseCrossesAbove(2));
         RuleCrossoverMonitor monitor = rule.CreateCrossoverMonitor();
-        var collector = new CrossoverTestCollector();
+        global::CrossoverTestCollector collector = new CrossoverTestCollector();
         collector.Attach(monitor);
         CompletedCandle[] candles = CrossoverTestData.CreateCandles("15 minute", 15, 1, 3, 4);
         RuleMarketData completeData = CrossoverTestData.CreateMarket("15 minute", candles);
@@ -52,35 +54,34 @@ internal sealed class CrossoverEventTests
         monitor.Process(completeData, CrossoverTestData.Origin.AddMinutes(45));
         Assert(collector.Detected.Count == 1 && collector.Completed.Count == 1, "Next-candle completion updates context without a second crossover.");
         Assert(collector.Completed[0].EventId == occurrence.EventId, "Context update retains the event identity.");
-        Assert(collector.Completed[0].Next?.Candle == candles[2], "Context update carries the next completed candle.");
+        Assert(HasCandle(collector.Completed[0].Next, candles[2]), "Context update carries the next completed candle.");
         Assert(occurrence.Next == null, "Previously delivered event objects remain immutable.");
         monitor.Process(completeData, CrossoverTestData.Origin.AddMinutes(45));
         Assert(collector.Completed.Count == 1, "Next-candle context is emitted once.");
-
         RuleCrossoverMonitor growingMonitor = rule.CreateCrossoverMonitor();
-        var growingCollector = new CrossoverTestCollector();
+        global::CrossoverTestCollector growingCollector = new CrossoverTestCollector();
         growingCollector.Attach(growingMonitor);
-        growingMonitor.Process(CrossoverTestData.CreateMarket("15 minute", candles[..2]), CrossoverTestData.Origin.AddMinutes(30));
+        growingMonitor.Process(CrossoverTestData.CreateMarket("15 minute", candles.Take(2).ToArray()), CrossoverTestData.Origin.AddMinutes(30));
         growingMonitor.Process(completeData, CrossoverTestData.Origin.AddMinutes(45));
         Assert(growingCollector.Detected.Count == 1 && growingCollector.Completed.Count == 1, "Deduplication survives replacement market snapshots.");
-        Assert(growingCollector.Completed[0].Next?.Candle == candles[2], "A newly received candle enriches the pending event.");
+        Assert(HasCandle(growingCollector.Completed[0].Next, candles[2]), "A newly received candle enriches the pending event.");
     }
 
     private void VerifyHistoricalContext()
     {
         BoundRule rule = CrossoverTestData.CreateRule(CrossoverTestData.CloseCrossesAbove(2));
-        var monitor = rule.CreateCrossoverMonitor();
-        var collector = new CrossoverTestCollector();
+        RuleCrossoverMonitor monitor = rule.CreateCrossoverMonitor();
+        global::CrossoverTestCollector collector = new CrossoverTestCollector();
         collector.Attach(monitor);
         CompletedCandle[] candles = CrossoverTestData.CreateCandles("15 minute", 15, 1, 3, 1, 4, 5);
         RuleMarketData data = CrossoverTestData.CreateMarket("15 minute", candles);
         monitor.Process(data, CrossoverTestData.Origin.AddMinutes(75));
         Assert(collector.Detected.Count == 2, "A batch must detect all completed historical crossovers, including skipped polling intervals.");
-        Assert(collector.Detected[0].Next?.Candle == candles[2] && collector.Detected[1].Next?.Candle == candles[4], "Known next candles are included during historical replay.");
+        Assert(HasCandle(collector.Detected[0].Next, candles[2]) && HasCandle(collector.Detected[1].Next, candles[4]), "Known next candles are included during historical replay.");
         Assert(collector.Detected[0].OccurredAt == candles[1].ClosedAt, "Occurrence time is the actual crossover candle close.");
         Assert(collector.Detected[0].ObservedAt == candles[4].ClosedAt, "Observation time is separate from occurrence time.");
-        var recentMonitor = rule.CreateCrossoverMonitor(CrossoverTestData.Origin.AddMinutes(45));
-        var recentCollector = new CrossoverTestCollector();
+        RuleCrossoverMonitor recentMonitor = rule.CreateCrossoverMonitor(CrossoverTestData.Origin.AddMinutes(45));
+        global::CrossoverTestCollector recentCollector = new CrossoverTestCollector();
         recentCollector.Attach(recentMonitor);
         recentMonitor.Process(data, CrossoverTestData.Origin.AddMinutes(75));
         Assert(recentCollector.Detected.Count == 1 && recentCollector.Detected[0].OccurredAt == candles[3].ClosedAt, "Start-after excludes old signals without discarding indicator history.");
@@ -88,19 +89,19 @@ internal sealed class CrossoverEventTests
 
     private void VerifyGroupsAndDirections()
     {
-        var above = CrossoverTestData.CloseCrossesAbove(2);
-        var below = new ComparisonCondition(above.Left, ComparisonOperator.CrossedBelow, above.Right);
-        var impossible = new ComparisonCondition(new NumberValue(1), ComparisonOperator.GreaterThan, new NumberValue(2));
-        var root = new ConditionGroup(GroupOperator.All, [impossible, above, below]);
-        var monitor = CrossoverTestData.CreateRule(root).CreateCrossoverMonitor();
-        var collector = new CrossoverTestCollector();
+        ComparisonCondition above = CrossoverTestData.CloseCrossesAbove(2);
+        ComparisonCondition below = new ComparisonCondition(above.Left, ComparisonOperator.CrossedBelow, above.Right);
+        ComparisonCondition impossible = new ComparisonCondition(new NumberValue(1), ComparisonOperator.GreaterThan, new NumberValue(2));
+        ConditionGroup root = new ConditionGroup(GroupOperator.All, TestArray.Create<ConditionDefinition>(impossible, above, below));
+        RuleCrossoverMonitor monitor = CrossoverTestData.CreateRule(root).CreateCrossoverMonitor();
+        global::CrossoverTestCollector collector = new CrossoverTestCollector();
         collector.Attach(monitor);
         monitor.Process(CrossoverTestData.CreateMarket("15 minute", CrossoverTestData.CreateCandles("15 minute", 15, 1, 3, 1)), CrossoverTestData.Origin.AddMinutes(45));
         Assert(collector.Detected.Count == 2, "Crossovers must not be hidden by a false ordinary filter.");
         Assert(collector.Detected[0].Direction == ComparisonOperator.CrossedAbove && collector.Detected[1].Direction == ComparisonOperator.CrossedBelow, "Both directions emit in chronological order.");
         Assert(!collector.Detected[0].OverallRuleEvaluation.IsMatch && !collector.Detected[1].OverallRuleEvaluation.IsMatch, "Crossover occurrence does not imply a complete strategy match.");
-        var disabledMonitor = CrossoverTestData.CreateRule(new ConditionGroup(GroupOperator.Any, [impossible, RuleModelCompatibilityData.DisabledComparison(above)])).CreateCrossoverMonitor();
-        var disabledCollector = new CrossoverTestCollector();
+        RuleCrossoverMonitor disabledMonitor = CrossoverTestData.CreateRule(new ConditionGroup(GroupOperator.Any, TestArray.Create<ConditionDefinition>(impossible, RuleModelCompatibilityData.DisabledComparison(above)))).CreateCrossoverMonitor();
+        global::CrossoverTestCollector disabledCollector = new CrossoverTestCollector();
         disabledCollector.Attach(disabledMonitor);
         disabledMonitor.Process(CrossoverTestData.CreateMarket("15 minute", CrossoverTestData.CreateCandles("15 minute", 15, 1, 3)), CrossoverTestData.Origin.AddMinutes(30));
         Assert(disabledCollector.Detected.Count == 0, "Disabled crossovers emit no events.");
@@ -108,19 +109,19 @@ internal sealed class CrossoverEventTests
 
     private void VerifyNestedExponentialAverages()
     {
-        var highAverage = new IndicatorValue(IndicatorFunction.ExponentialMovingAverage, "15 minute", 10, new CandleValue("15 minute", CandleField.High));
-        var closeAverage = new IndicatorValue(IndicatorFunction.ExponentialMovingAverage, "15 minute", 10, new CandleValue("15 minute"));
-        var nestedAverage = new IndicatorValue(IndicatorFunction.ExponentialMovingAverage, "15 minute", 10, closeAverage);
-        var comparison = new ComparisonCondition(highAverage, ComparisonOperator.CrossedAbove, nestedAverage);
+        IndicatorValue highAverage = new IndicatorValue(IndicatorFunction.ExponentialMovingAverage, "15 minute", 10, new CandleValue("15 minute", CandleField.High));
+        IndicatorValue closeAverage = new IndicatorValue(IndicatorFunction.ExponentialMovingAverage, "15 minute", 10, new CandleValue("15 minute"));
+        IndicatorValue nestedAverage = new IndicatorValue(IndicatorFunction.ExponentialMovingAverage, "15 minute", 10, closeAverage);
+        ComparisonCondition comparison = new ComparisonCondition(highAverage, ComparisonOperator.CrossedAbove, nestedAverage);
         decimal[] prices = new decimal[61];
         Array.Fill(prices, 100m, 0, 20);
         Array.Fill(prices, 10m, 20, 20);
         Array.Fill(prices, 200m, 40, 21);
         CompletedCandle[] candles = CrossoverTestData.CreateCandles("15 minute", 15, prices);
-        var monitor = CrossoverTestData.CreateRule(comparison).CreateCrossoverMonitor();
-        var collector = new CrossoverTestCollector();
+        RuleCrossoverMonitor monitor = CrossoverTestData.CreateRule(comparison).CreateCrossoverMonitor();
+        global::CrossoverTestCollector collector = new CrossoverTestCollector();
         collector.Attach(monitor);
-        monitor.Process(CrossoverTestData.CreateMarket("15 minute", candles), candles[^1].ClosedAt);
+        monitor.Process(CrossoverTestData.CreateMarket("15 minute", candles), candles[candles.Length - 1].ClosedAt);
         Assert(collector.Detected.Count == 1, "The requested nested exponential-average example produces an event.");
         CrossoverOccurrence occurrence = collector.Detected[0];
         Assert(occurrence.Current.Left.IndicatorFunction == IndicatorFunction.ExponentialMovingAverage && occurrence.Current.Left.Length == 10, "Indicator metadata accompanies values.");
@@ -133,10 +134,10 @@ internal sealed class CrossoverEventTests
 
     private void VerifyRelativeStrengthValues()
     {
-        var indicator = new IndicatorValue(IndicatorFunction.RelativeStrengthIndex, "15 minute", 2);
-        var condition = new ComparisonCondition(indicator, ComparisonOperator.CrossedAbove, new NumberValue(80));
-        var monitor = CrossoverTestData.CreateRule(condition).CreateCrossoverMonitor();
-        var collector = new CrossoverTestCollector();
+        IndicatorValue indicator = new IndicatorValue(IndicatorFunction.RelativeStrengthIndex, "15 minute", 2);
+        ComparisonCondition condition = new ComparisonCondition(indicator, ComparisonOperator.CrossedAbove, new NumberValue(80));
+        RuleCrossoverMonitor monitor = CrossoverTestData.CreateRule(condition).CreateCrossoverMonitor();
+        global::CrossoverTestCollector collector = new CrossoverTestCollector();
         collector.Attach(monitor);
         monitor.Process(CrossoverTestData.CreateMarket("15 minute", CrossoverTestData.CreateCandles("15 minute", 15, 10, 12, 11, 13)), CrossoverTestData.Origin.AddMinutes(60));
         Assert(collector.Detected.Count == 1, "Relative Strength Index crossover emits an event.");
@@ -150,35 +151,33 @@ internal sealed class CrossoverEventTests
 
     private void VerifyMixedTimeframes()
     {
-        var fast = new IndicatorValue(IndicatorFunction.SimpleMovingAverage, "15 minute", 1);
-        var slow = new IndicatorValue(IndicatorFunction.SimpleMovingAverage, "2 hour", 1);
-        var condition = new ComparisonCondition(fast, ComparisonOperator.CrossedAbove, slow);
-        var monitor = CrossoverTestData.CreateRule(condition).CreateCrossoverMonitor();
-        var collector = new CrossoverTestCollector();
+        IndicatorValue fast = new IndicatorValue(IndicatorFunction.SimpleMovingAverage, "15 minute", 1);
+        IndicatorValue slow = new IndicatorValue(IndicatorFunction.SimpleMovingAverage, "2 hour", 1);
+        ComparisonCondition condition = new ComparisonCondition(fast, ComparisonOperator.CrossedAbove, slow);
+        RuleCrossoverMonitor monitor = CrossoverTestData.CreateRule(condition).CreateCrossoverMonitor();
+        global::CrossoverTestCollector collector = new CrossoverTestCollector();
         collector.Attach(monitor);
-        decimal[] prices = [9, 9, 9, 9, 9, 9, 9, 9, 11, 12];
-        var series = new Dictionary<string, IReadOnlyList<CompletedCandle>>
-        {
-            { "15 minute", CrossoverTestData.CreateCandles("15 minute", 15, prices) },
-            { "2 hour", CrossoverTestData.CreateCandles("2 hour", 120, 10, 1000) }
-        };
+        decimal[] prices = TestArray.Create<decimal>(9, 9, 9, 9, 9, 9, 9, 9, 11, 12);
+        Dictionary<string, IReadOnlyList<CompletedCandle>> series = new Dictionary<string, IReadOnlyList<CompletedCandle>>();
+        series.Add("15 minute", CrossoverTestData.CreateCandles("15 minute", 15, prices));
+        series.Add("2 hour", CrossoverTestData.CreateCandles("2 hour", 120, 10, 1000));
         monitor.Process(new RuleMarketData(1, series), CrossoverTestData.Origin.AddMinutes(135));
         Assert(collector.Detected.Count == 1, "Mixed timeframe crossover emits once.");
         CrossoverOccurrence occurrence = collector.Detected[0];
         Assert(occurrence.Current.Candle.ClosedAt == CrossoverTestData.Origin.AddMinutes(135), "Event candle uses evaluation clock.");
-        Assert(occurrence.Current.Right.SourceCandle?.ClosedAt == CrossoverTestData.Origin.AddMinutes(120), "Operand reports actual aligned slower candle.");
+        Assert((occurrence.Current.Right.SourceCandle != null && occurrence.Current.Right.SourceCandle.ClosedAt == CrossoverTestData.Origin.AddMinutes(120)), "Operand reports actual aligned slower candle.");
         AssertNumber(10, occurrence.Current.Right.Value, "Future slower candle cannot contaminate the value.");
         Assert(occurrence.Next == null, "Future evaluation-clock candle cannot leak into next context.");
     }
 
     private void VerifyCountDoesNotReplayEvents()
     {
-        var count = new CountValue(CrossoverTestData.CloseCrossesAbove(2), "15 minute", 2);
-        var condition = new ComparisonCondition(count, ComparisonOperator.GreaterThanOrEqual, new NumberValue(1));
-        var monitor = CrossoverTestData.CreateRule(condition).CreateCrossoverMonitor();
-        var collector = new CrossoverTestCollector();
+        CountValue count = new CountValue(CrossoverTestData.CloseCrossesAbove(2), "15 minute", 2);
+        ComparisonCondition condition = new ComparisonCondition(count, ComparisonOperator.GreaterThanOrEqual, new NumberValue(1));
+        RuleCrossoverMonitor monitor = CrossoverTestData.CreateRule(condition).CreateCrossoverMonitor();
+        global::CrossoverTestCollector collector = new CrossoverTestCollector();
         collector.Attach(monitor);
-        var data = CrossoverTestData.CreateMarket("15 minute", CrossoverTestData.CreateCandles("15 minute", 15, 1, 3, 4, 5));
+        RuleMarketData data = CrossoverTestData.CreateMarket("15 minute", CrossoverTestData.CreateCandles("15 minute", 15, 1, 3, 4, 5));
         monitor.Process(data, CrossoverTestData.Origin.AddMinutes(45));
         monitor.Process(data, CrossoverTestData.Origin.AddMinutes(60));
         Assert(collector.Detected.Count == 1, "Historical Count evaluation must not replay the same physical crossover.");
@@ -187,26 +186,58 @@ internal sealed class CrossoverEventTests
 
     private void VerifyInvalidRequestsAndSubscriberFailure()
     {
-        var monitor = CrossoverTestData.CreateRule(CrossoverTestData.CloseCrossesAbove(2)).CreateCrossoverMonitor();
-        var collector = new CrossoverTestCollector();
+        RuleCrossoverMonitor monitor = CrossoverTestData.CreateRule(CrossoverTestData.CloseCrossesAbove(2)).CreateCrossoverMonitor();
+        global::CrossoverTestCollector collector = new CrossoverTestCollector();
         monitor.CrossoverDetected += ThrowFromSubscriber;
         collector.Attach(monitor);
-        var data = CrossoverTestData.CreateMarket("15 minute", CrossoverTestData.CreateCandles("15 minute", 15, 1, 3));
+        RuleMarketData data = CrossoverTestData.CreateMarket("15 minute", CrossoverTestData.CreateCandles("15 minute", 15, 1, 3));
         bool subscriberFailureReported = false;
-        try { monitor.Process(data, CrossoverTestData.Origin.AddMinutes(30)); }
-        catch (AggregateException) { subscriberFailureReported = true; }
+        try
+        {
+            monitor.Process(data, CrossoverTestData.Origin.AddMinutes(30));
+        }
+        catch (AggregateException)
+        {
+            subscriberFailureReported = true;
+        }
+
         Assert(subscriberFailureReported && collector.Detected.Count == 1, "One failing subscriber must not prevent delivery to other subscribers.");
         monitor.Process(data, CrossoverTestData.Origin.AddMinutes(30));
         Assert(collector.Detected.Count == 1, "Subscriber failure must not replay committed events.");
         bool backwardsRejected = false;
-        try { monitor.Process(data, CrossoverTestData.Origin.AddMinutes(15)); }
-        catch (ArgumentException) { backwardsRejected = true; }
+        try
+        {
+            monitor.Process(data, CrossoverTestData.Origin.AddMinutes(15));
+        }
+        catch (ArgumentException)
+        {
+            backwardsRejected = true;
+        }
+
         Assert(backwardsRejected, "One monitor cannot replay backwards accidentally.");
-        var secondInstrument = new RuleMarketData(2, new Dictionary<string, IReadOnlyList<CompletedCandle>> { { "15 minute", Array.Empty<CompletedCandle>() } });
+        Dictionary<string, IReadOnlyList<CompletedCandle>> secondSeries = new Dictionary<string, IReadOnlyList<CompletedCandle>>();
+        secondSeries.Add("15 minute", Array.Empty<CompletedCandle>());
+        RuleMarketData secondInstrument = new RuleMarketData(2, secondSeries);
         bool instrumentRejected = false;
-        try { monitor.Process(secondInstrument, CrossoverTestData.Origin.AddMinutes(45)); }
-        catch (ArgumentException) { instrumentRejected = true; }
+        try
+        {
+            monitor.Process(secondInstrument, CrossoverTestData.Origin.AddMinutes(45));
+        }
+        catch (ArgumentException)
+        {
+            instrumentRejected = true;
+        }
+
         Assert(instrumentRejected, "Instrument state must not be mixed.");
+    }
+
+    private static bool HasCandle(CrossoverCandleSnapshot? snapshot, CompletedCandle candle)
+    {
+        if (snapshot == null)
+        {
+            return false;
+        }
+        return snapshot.Candle == candle;
     }
 
     private void ThrowFromSubscriber(object? sender, CrossoverEventArgs arguments)
@@ -214,4 +245,5 @@ internal sealed class CrossoverEventTests
         throw new InvalidOperationException("Intentional subscriber failure for regression coverage.");
     }
 }
+
 

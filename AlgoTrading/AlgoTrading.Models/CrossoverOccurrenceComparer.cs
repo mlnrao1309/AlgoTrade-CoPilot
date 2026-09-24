@@ -1,15 +1,41 @@
-namespace AlgoTrading.Models.Rules;
-
-internal sealed class CrossoverOccurrenceComparer : IComparer<CrossoverOccurrence>
+namespace AlgoTrading.Models.Rules
 {
-    internal static CrossoverOccurrenceComparer Instance { get; } = new();
-
-    public int Compare(CrossoverOccurrence? first, CrossoverOccurrence? second)
+    internal sealed class CrossoverOccurrenceComparer : IComparer<CrossoverOccurrence>
     {
-        if (ReferenceEquals(first, second)) return 0;
-        if (first == null) return -1;
-        if (second == null) return 1;
-        int timestampOrder = first.OccurredAt.CompareTo(second.OccurredAt);
-        return timestampOrder != 0 ? timestampOrder : StringComparer.Ordinal.Compare(first.ConditionPath, second.ConditionPath);
+        private static readonly CrossoverOccurrenceComparer instance = new CrossoverOccurrenceComparer();
+        internal static CrossoverOccurrenceComparer Instance
+        {
+            get
+            {
+                return instance;
+            }
+        }
+
+        public int Compare(CrossoverOccurrence? first, CrossoverOccurrence? second)
+        {
+            if (ReferenceEquals(first, second))
+            {
+                return 0;
+            }
+
+            if (first == null)
+            {
+                return -1;
+            }
+
+            if (second == null)
+            {
+                return 1;
+            }
+
+            int timestampOrder = first.OccurredAt.CompareTo(second.OccurredAt);
+            if (timestampOrder != 0)
+            {
+                return timestampOrder;
+            }
+
+            return StringComparer.Ordinal.Compare(first.ConditionPath, second.ConditionPath);
+        }
     }
 }
+

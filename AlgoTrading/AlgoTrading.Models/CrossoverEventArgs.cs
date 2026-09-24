@@ -1,12 +1,21 @@
-namespace AlgoTrading.Models.Rules;
-
-public sealed class CrossoverEventArgs : EventArgs
+namespace AlgoTrading.Models.Rules
 {
-    public CrossoverOccurrence Occurrence { get; }
-
-    public CrossoverEventArgs(CrossoverOccurrence occurrence)
+    public sealed class CrossoverEventArgs : EventArgs
     {
-        ArgumentNullException.ThrowIfNull(occurrence);
-        Occurrence = occurrence;
+        private readonly CrossoverOccurrence occurrence;
+        public CrossoverOccurrence Occurrence
+        {
+            get
+            {
+                return occurrence;
+            }
+        }
+
+        public CrossoverEventArgs(CrossoverOccurrence occurrence)
+        {
+            ArgumentNullException.ThrowIfNull(occurrence);
+            this.occurrence = occurrence;
+        }
     }
 }
+

@@ -2,8 +2,24 @@ using AlgoTrading.Models.Rules;
 
 internal sealed class CrossoverTestCollector
 {
-    internal List<CrossoverOccurrence> Detected { get; } = new();
-    internal List<CrossoverOccurrence> Completed { get; } = new();
+    private readonly List<CrossoverOccurrence> detected = new List<CrossoverOccurrence>();
+
+    internal List<CrossoverOccurrence> Detected
+    {
+        get
+        {
+            return detected;
+        }
+    }
+    private readonly List<CrossoverOccurrence> completed = new List<CrossoverOccurrence>();
+
+    internal List<CrossoverOccurrence> Completed
+    {
+        get
+        {
+            return completed;
+        }
+    }
 
     internal void Attach(RuleCrossoverMonitor monitor)
     {
@@ -21,3 +37,5 @@ internal sealed class CrossoverTestCollector
         Completed.Add(arguments.Occurrence);
     }
 }
+
+
