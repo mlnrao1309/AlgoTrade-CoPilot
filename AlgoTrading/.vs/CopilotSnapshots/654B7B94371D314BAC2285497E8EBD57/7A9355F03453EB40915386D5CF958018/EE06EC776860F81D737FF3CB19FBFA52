@@ -1,0 +1,107 @@
+﻿using System;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using System.Windows.Input;
+using Microsoft.Web.WebView2.Core;
+
+namespace AlgoTrading.ViewModels
+{
+    public class WebViewViewModel : INotifyPropertyChanged
+    {
+        private string _uri = "https://www.bing.com";
+
+        private string? _lastResourceUri;
+        private string? _lastResponseStatus;
+
+        public string? LastResourceUri
+        {
+            get => _lastResourceUri;
+            private set
+            {
+                if (_lastResourceUri == value) return;
+                _lastResourceUri = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string? LastResponseStatus
+        {
+            get => _lastResponseStatus;
+            private set
+            {
+                if (_lastResponseStatus == value) return;
+                _lastResponseStatus = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string Uri
+        {
+            get => _uri;
+            set
+            {
+                if (_uri == value) return;
+                _uri = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private ICommand? _navigateCommand;
+        public ICommand NavigateCommand => _navigateCommand ??= new RelayCommand(_ => ExecuteNavigate());
+
+        private void ExecuteNavigate()
+        {
+            // Navigation is handled by the view (MainWindow) listening to property changes for Uri.
+            // This method exists so the button can trigger re-navigation even if the Uri hasn't changed.
+            OnPropertyChanged(nameof(Uri));
+        }
+
+        // Called from the view when WebView2 raises WebResourceResponseReceived
+        public void OnWebResourceResponseReceived(object? sender, CoreWebView2WebResourceResponseReceivedEventArgs args)
+        {
+            try
+            {
+                // Capture request URI and response status (if available)
+                var requestUri = args.Request?.Uri;
+                LastResourceUri = requestUri;
+
+                var status = args.Response?.StatusCode.ToString();
+                LastResponseStatus = status ?? "N/A";
+            }
+            catch
+            {
+                // swallow any errors to avoid crashing the UI thread
+            }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+    }
+
+    // Minimal RelayCommand implementation to avoid third-party dependencies
+    internal class RelayCommand : ICommand
+    {
+        private readonly Action<object?> _execute;
+        private readonly Func<object?, bool>? _canExecute;
+
+        public RelayCommand(Action<object?> execute, Func<object?, bool>? canExecute = null)
+        {
+            _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+            _canExecute = canExecute;
+        }
+
+        public bool CanExecute(object? parameter) => _canExecute?.Invoke(parameter) ?? true;
+
+        public void Execute(object? parameter) => _execute(parameter);
+
+        public event EventHandler? CanExecuteChanged
+        {
+            add { CommandManager.RequerySuggested += value; }
+            remove { CommandManager.RequerySuggested -= value; }
+        }
+    }
+}

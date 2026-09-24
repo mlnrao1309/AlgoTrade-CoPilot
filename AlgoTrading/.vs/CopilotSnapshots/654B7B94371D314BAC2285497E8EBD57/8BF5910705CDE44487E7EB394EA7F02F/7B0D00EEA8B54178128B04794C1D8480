@@ -1,0 +1,13 @@
+﻿namespace AlgoTrading.Services
+{
+    /// <summary>
+    /// Application-wide configuration values.
+    /// Expose readonly connection strings and similar values here so they are
+    /// available throughout the application via AppConfiguration.MsSqlDatabase.
+    /// </summary>
+    public static class AppConfiguration
+    {
+        // Readonly MS SQL connection string provided by the user.
+        public static string MsSqlDatabase { get; } = @"Server=MANCHIKANTI\MANCHIKANTI;Database=Algo_Trading_CFCore;Trusted_Connection=True;TrustServerCertificate=True;";
+    }
+}

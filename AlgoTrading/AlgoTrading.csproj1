@@ -1,0 +1,51 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net10.0-windows</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<UseWPF>true</UseWPF>
+	</PropertyGroup>
+
+	<PropertyGroup>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+    <StartupObject>AlgoTrading.App</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="AlgoTrading.DataAccess\AlgoTrading.DataAccess.csproj" />
+    <None Include="AlgoTrading.Models\AlgoTrading.Models.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.90.0" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4255-prerelease" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.12" />
+  </ItemGroup>
+
+  <!-- Exclude separate project source trees from the main app project to avoid accidental compilation
+       (new class library projects live in subfolders of the solution root) -->
+  <ItemGroup>
+    <Reference Include="AlgoTrading.DataAccess">
+      <HintPath>AlgoTrading.DataAccess\bin\Debug\net10.0\AlgoTrading.DataAccess.dll</HintPath>
+    </Reference>
+    <Reference Include="AlgoTrading.Models">
+      <HintPath>AlgoTrading.Models\bin\Debug\net10.0\AlgoTrading.Models.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!-- ProjectReference entries intentionally omitted to avoid CI restore/build issues.
+       Projects still exist as separate csproj files and can be referenced from the solution or IDE. -->
+
+</Project>

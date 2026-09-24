@@ -1,0 +1,277 @@
+﻿using System;
+using AlgoTrading.Models;
+
+public static class InstrumentCandleDataExtensions
+{
+    public static void AddIndicatorData(
+        this InstrumentCandleData instrumentData,
+        Indicator indicator,
+        int period,
+        Func<Candle, decimal>? selector = null,
+        string? sourceIndicatorKey = null
+    )
+    {
+        double[] values;
+
+        if (sourceIndicatorKey != null)
+        {
+            // Use existing indicator series as input
+            if (!instrumentData.IndicatorData!.ContainsKey(sourceIndicatorKey))
+                throw new ArgumentException($"Source indicator '{sourceIndicatorKey}' not found.");
+
+            var sourceSeries = instrumentData.IndicatorData[sourceIndicatorKey];
+
+            values = indicator switch
+            {
+                Indicator.SMA => CalculateSma(sourceSeries, period),
+                Indicator.EMA => CalculateEma(sourceSeries, period),
+                _ => throw new NotSupportedException($"Indicator {indicator} not supported for smoothing.")
+            };
+
+            instrumentData.Add($"{sourceIndicatorKey}_{indicator}_{period}", values);
+        }
+        else
+        {
+            // Use candles directly
+            values = indicator switch
+            {
+                Indicator.SMA => CalculateSma(instrumentData.Candles, period, selector ?? (c => c.Close)),
+                Indicator.EMA => CalculateEma(instrumentData.Candles, period, selector ?? (c => c.Close)),
+                Indicator.RSI => CalculateRsi(instrumentData.Candles, period, selector ?? (c => c.Close)),
+                Indicator.BollingerBands => CalculateBollingerBands(instrumentData.Candles, period, 2.0, selector ?? (c => c.Close)).Middle,
+                _ => throw new NotSupportedException($"Indicator {indicator} not implemented yet.")
+            };
+
+            instrumentData.Add($"{indicator}_{period}", values);
+        }
+    }
+
+    // --- Core calculators ---
+    private static double[] CalculateEma(Candle[] candles, int period, Func<Candle, decimal> selector)
+    {
+        double[] ema = new double[candles.Length];
+        double multiplier = 2.0 / (period + 1);
+        double? prevEma = null;
+
+        for (int i = 0; i < candles.Length; i++)
+        {
+            double value = (double)selector(candles[i]);
+            if (prevEma == null)
+            {
+                ema[i] = value;
+                prevEma = value;
+            }
+            else
+            {
+                double currentEma = (value - prevEma.Value) * multiplier + prevEma.Value;
+                ema[i] = currentEma;
+                prevEma = currentEma;
+            }
+        }
+        return ema;
+    }
+
+    private static double[] CalculateSma(Candle[] candles, int period, Func<Candle, decimal> selector)
+    {
+        double[] sma = new double[candles.Length];
+        double sum = 0;
+
+        for (int i = 0; i < candles.Length; i++)
+        {
+            double value = (double)selector(candles[i]);
+            sum += value;
+
+            if (i >= period)
+                sum -= (double)selector(candles[i - period]);
+
+            sma[i] = i >= period - 1 ? sum / period : double.NaN;
+        }
+        return sma;
+    }
+
+    // Overload for smoothing existing series
+    private static double[] CalculateSma(double[] series, int period)
+    {
+        double[] sma = new double[series.Length];
+        double sum = 0;
+
+        for (int i = 0; i < series.Length; i++)
+        {
+            sum += series[i];
+            if (i >= period)
+                sum -= series[i - period];
+
+            sma[i] = i >= period - 1 ? sum / period : double.NaN;
+        }
+        return sma;
+    }
+
+    private static double[] CalculateEma(double[] series, int period)
+    {
+        double[] ema = new double[series.Length];
+        double multiplier = 2.0 / (period + 1);
+        double? prevEma = null;
+
+        for (int i = 0; i < series.Length; i++)
+        {
+            double value = series[i];
+            if (double.IsNaN(value))
+            {
+                ema[i] = prevEma ?? double.NaN;
+                continue;
+            }
+
+            if (prevEma == null)
+            {
+                ema[i] = value;
+                prevEma = value;
+            }
+            else
+            {
+                double currentEma = (value - prevEma.Value) * multiplier + prevEma.Value;
+                ema[i] = currentEma;
+                prevEma = currentEma;
+            }
+        }
+        return ema;
+    }
+
+    private static double[] CalculateRsi(Candle[] candles, int period, Func<Candle, decimal> selector)
+    {
+        double[] rsi = new double[candles.Length];
+        double avgGain = 0, avgLoss = 0;
+
+        for (int i = 1; i < candles.Length; i++)
+        {
+            double change = (double)(selector(candles[i]) - selector(candles[i - 1]));
+            double gain = change > 0 ? change : 0;
+            double loss = change < 0 ? -change : 0;
+
+            if (i <= period)
+            {
+                avgGain += gain;
+                avgLoss += loss;
+                rsi[i] = double.NaN;
+            }
+            else
+            {
+                avgGain = (avgGain * (period - 1) + gain) / period;
+                avgLoss = (avgLoss * (period - 1) + loss) / period;
+
+                double rs = avgLoss == 0 ? double.PositiveInfinity : avgGain / avgLoss;
+                rsi[i] = 100 - (100 / (1 + rs));
+            }
+        }
+        return rsi;
+    }
+    private static (double[] Middle, double[] Upper, double[] Lower) CalculateBollingerBands(
+    Candle[] candles, int period, double multiplier, Func<Candle, decimal> selector)
+    {
+        int n = candles.Length;
+        double[] middle = CalculateSma(candles, period, selector);
+        double[] upper = new double[n];
+        double[] lower = new double[n];
+
+        for (int i = 0; i < n; i++)
+        {
+            if (i < period - 1)
+            {
+                upper[i] = lower[i] = double.NaN;
+                continue;
+            }
+
+            double mean = middle[i];
+            double sumSq = 0;
+            for (int j = i - period + 1; j <= i; j++)
+            {
+                double val = (double)selector(candles[j]);
+                sumSq += (val - mean) * (val - mean);
+            }
+            double stdDev = Math.Sqrt(sumSq / period);
+
+            upper[i] = mean + multiplier * stdDev;
+            lower[i] = mean - multiplier * stdDev;
+        }
+
+        return (middle, upper, lower);
+    }
+
+    private static double[] CalculateSuperTrend(Candle[] candles, int period, double multiplier)
+    {
+        int n = candles.Length;
+        double[] atr = CalculateAtr(candles, period);
+        double[] superTrend = new double[n];
+
+        double prevUpper = 0, prevLower = 0;
+        bool trendUp = true;
+
+        for (int i = 0; i < n; i++)
+        {
+            double mid = ((double)candles[i].High + (double)candles[i].Low) / 2;
+            double upper = mid + multiplier * atr[i];
+            double lower = mid - multiplier * atr[i];
+
+            if (i > 0)
+            {
+                if (candles[i].Close > prevUpper)
+                    trendUp = true;
+                else if (candles[i].Close < prevLower)
+                    trendUp = false;
+            }
+
+            superTrend[i] = trendUp ? lower : upper;
+            prevUpper = upper;
+            prevLower = lower;
+        }
+
+        return superTrend;
+    }
+    private static double[] CalculateAtr(Candle[] candles, int period)
+    {
+        int n = candles.Length;
+        double[] tr = new double[n];
+        double[] atr = new double[n];
+
+        for (int i = 0; i < n; i++)
+        {
+            if (i == 0)
+            {
+                tr[i] = (double)(candles[i].High - candles[i].Low);
+            }
+            else
+            {
+                double high = (double)candles[i].High;
+                double low = (double)candles[i].Low;
+                double prevClose = (double)candles[i - 1].Close;
+
+                double range1 = high - low;
+                double range2 = Math.Abs(high - prevClose);
+                double range3 = Math.Abs(low - prevClose);
+
+                tr[i] = Math.Max(range1, Math.Max(range2, range3));
+            }
+
+            if (i < period)
+            {
+                atr[i] = double.NaN; // not enough data yet
+            }
+            else if (i == period)
+            {
+                // first ATR = simple average of TR
+                double sum = 0;
+                for (int j = 0; j < period; j++) sum += tr[j];
+                atr[i] = sum / period;
+            }
+            else
+            {
+                // subsequent ATR = Wilder’s smoothing
+                atr[i] = (atr[i - 1] * (period - 1) + tr[i]) / period;
+            }
+        }
+
+        return atr;
+    }
+
+
+
+}

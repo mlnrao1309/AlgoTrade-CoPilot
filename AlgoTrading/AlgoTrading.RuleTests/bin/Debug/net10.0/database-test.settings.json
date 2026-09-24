@@ -1,0 +1,8 @@
+{
+  "ConnectionString": "Server=MANCHIKANTI\\MANCHIKANTI;Database=Algo_Trading_CFCore;Trusted_Connection=True;Encrypt=false;TrustServerCertificate=True;",
+  "InstrumentToken": 265,
+  "Timeframe": "15minute",
+  "CandleLengthMinutes": 15,
+  "TimestampTimeZoneId": "India Standard Time",
+  "TimestampRepresentsCandleOpen": true
+}

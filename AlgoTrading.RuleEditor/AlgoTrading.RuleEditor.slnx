@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="AlgoTrading.RuleEditor.csproj" />
+  <Project Path="../AlgoTrading/AlgoTrading.Models/AlgoTrading.Models.csproj" />
+</Solution>

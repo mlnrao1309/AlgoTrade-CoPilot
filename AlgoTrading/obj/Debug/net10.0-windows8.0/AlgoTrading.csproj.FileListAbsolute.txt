@@ -1,0 +1,9 @@
+D:\MyWorkspace\AlgoTrading\obj\Debug\net10.0-windows8.0\AlgoTrading.csproj.AssemblyReference.cache
+D:\MyWorkspace\AlgoTrading\obj\Debug\net10.0-windows8.0\Views\StatusPopupWindow.baml
+D:\MyWorkspace\AlgoTrading\obj\Debug\net10.0-windows8.0\MainWindow.g.cs
+D:\MyWorkspace\AlgoTrading\obj\Debug\net10.0-windows8.0\Views\StatusPopupWindow.g.cs
+D:\MyWorkspace\AlgoTrading\obj\Debug\net10.0-windows8.0\App.g.cs
+D:\MyWorkspace\AlgoTrading\obj\Debug\net10.0-windows8.0\AlgoTrading_Content.g.cs
+D:\MyWorkspace\AlgoTrading\obj\Debug\net10.0-windows8.0\GeneratedInternalTypeHelper.g.cs
+D:\MyWorkspace\AlgoTrading\obj\Debug\net10.0-windows8.0\AlgoTrading_MarkupCompile.cache
+D:\MyWorkspace\AlgoTrading\obj\Debug\net10.0-windows8.0\AlgoTrading_MarkupCompile.lref

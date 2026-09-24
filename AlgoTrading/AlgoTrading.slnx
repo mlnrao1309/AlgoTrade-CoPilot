@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="AlgoTrading.csproj" />
+  <Project Path="AlgoTrading.Models/AlgoTrading.Models.csproj" />
+  <Project Path="AlgoTrading.DataAccess/AlgoTrading.DataAccess.csproj" />
+  <Project Path="AlgoTrading.RuleTests/AlgoTrading.RuleTests.csproj" />
+</Solution>

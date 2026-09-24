@@ -1,0 +1,183 @@
+﻿using System;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using System.Windows.Input;
+using Microsoft.Web.WebView2.Core;
+using System.Collections.ObjectModel;
+using System.Windows;
+
+namespace AlgoTrading.ViewModels
+{
+    public class WebViewViewModel : INotifyPropertyChanged
+    {
+        private string _uri = "https://www.bing.com";
+
+        private string? _lastResourceUri;
+        private string? _lastResponseStatus;
+
+        public string? LastResourceUri
+        {
+            get => _lastResourceUri;
+            private set
+            {
+                if (_lastResourceUri == value) return;
+                _lastResourceUri = value;
+                OnPropertyChanged();
+            }
+
+        public ObservableCollection<StatusMessage> StatusMessages { get; } = new ObservableCollection<StatusMessage>();
+        }
+
+        public string? LastResponseStatus
+        {
+            get => _lastResponseStatus;
+            private set
+            {
+                if (_lastResponseStatus == value) return;
+                _lastResponseStatus = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string Uri
+        {
+            get => _uri;
+            set
+            {
+                if (_uri == value) return;
+                _uri = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private string? _navigationSource;
+        public string? NavigationSource
+        {
+            get => _navigationSource;
+            private set
+            {
+                if (_navigationSource == value) return;
+                _navigationSource = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private string? _errorMessage;
+        public string? ErrorMessage
+        {
+            get => _errorMessage;
+            private set
+            {
+                if (_errorMessage == value) return;
+                _errorMessage = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private ICommand? _navigateCommand;
+        public ICommand NavigateCommand => _navigateCommand ??= new RelayCommand(_ => ExecuteNavigate());
+
+        private ICommand? _webResourceResponseReceivedCommand;
+        public ICommand WebResourceResponseReceivedCommand => _webResourceResponseReceivedCommand ??= new RelayCommand(p =>
+        {
+            // Expect the CoreWebView2WebResourceResponseReceivedEventArgs from the behavior
+            if (p is CoreWebView2WebResourceResponseReceivedEventArgs args)
+            {
+                OnWebResourceResponseReceived(null, args);
+            }
+        });
+
+        private ICommand? _showMessageCommand;
+        public ICommand ShowMessageCommand => _showMessageCommand ??= new RelayCommand(p =>
+        {
+            if (p is StatusMessage msg)
+            {
+                // Show a simple popup window with details (View created here for simplicity)
+                var win = new Views.StatusPopupWindow(msg.Title, msg.Details);
+                try { win.ShowDialog(); } catch { try { win.Show(); } catch { } }
+            }
+        });
+
+        private void ExecuteNavigate()
+        {
+            // Normalize the user-entered Uri and set NavigationSource which the View binds to
+            var normalized = NormalizeUri(Uri);
+            if (!string.IsNullOrEmpty(normalized))
+            {
+                ErrorMessage = null;
+                NavigationSource = normalized;
+            }
+            else
+            {
+                // Provide validation feedback
+                ErrorMessage = string.IsNullOrWhiteSpace(Uri) ? "Please enter a URL." : "Invalid URL.";
+            }
+        }
+
+        private string? NormalizeUri(string? input)
+        {
+            if (string.IsNullOrWhiteSpace(input))
+                return null;
+
+            var trimmed = input.Trim();
+
+            // If user entered a scheme, trust it if it's a well-formed absolute URI
+            if (System.Uri.TryCreate(trimmed, System.UriKind.Absolute, out var tmp) && !string.IsNullOrEmpty(tmp.Scheme))
+                return tmp.ToString();
+
+            // Otherwise assume https
+            if (System.Uri.TryCreate("https://" + trimmed, System.UriKind.Absolute, out var httpsUri))
+                return httpsUri.ToString();
+
+            return null;
+        }
+
+        // Called from the view when WebView2 raises WebResourceResponseReceived
+        public void OnWebResourceResponseReceived(object? sender, CoreWebView2WebResourceResponseReceivedEventArgs args)
+        {
+            try
+            {
+                // Capture request URI and response status (if available)
+                var requestUri = args.Request?.Uri;
+                LastResourceUri = requestUri;
+
+                var status = args.Response?.StatusCode.ToString();
+                LastResponseStatus = status ?? "N/A";
+            }
+            catch
+            {
+                // swallow any errors to avoid crashing the UI thread
+            }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+    }
+
+    // Minimal RelayCommand implementation to avoid third-party dependencies
+    internal class RelayCommand : ICommand
+    {
+        private readonly Action<object?> _execute;
+        private readonly Func<object?, bool>? _canExecute;
+
+        public RelayCommand(Action<object?> execute, Func<object?, bool>? canExecute = null)
+        {
+            _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+            _canExecute = canExecute;
+        }
+
+        public bool CanExecute(object? parameter) => _canExecute?.Invoke(parameter) ?? true;
+
+        public void Execute(object? parameter) => _execute(parameter);
+
+        public event EventHandler? CanExecuteChanged
+        {
+            add { CommandManager.RequerySuggested += value; }
+            remove { CommandManager.RequerySuggested -= value; }
+        }
+    }
+}
