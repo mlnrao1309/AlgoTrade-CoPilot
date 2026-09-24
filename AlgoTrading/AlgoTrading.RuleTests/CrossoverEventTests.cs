@@ -89,7 +89,7 @@ internal sealed class CrossoverEventTests
     private void VerifyGroupsAndDirections()
     {
         var above = CrossoverTestData.CloseCrossesAbove(2);
-        var below = above with { Operator = ComparisonOperator.CrossedBelow };
+        var below = new ComparisonCondition(above.Left, ComparisonOperator.CrossedBelow, above.Right);
         var impossible = new ComparisonCondition(new NumberValue(1), ComparisonOperator.GreaterThan, new NumberValue(2));
         var root = new ConditionGroup(GroupOperator.All, [impossible, above, below]);
         var monitor = CrossoverTestData.CreateRule(root).CreateCrossoverMonitor();
@@ -99,7 +99,7 @@ internal sealed class CrossoverEventTests
         Assert(collector.Detected.Count == 2, "Crossovers must not be hidden by a false ordinary filter.");
         Assert(collector.Detected[0].Direction == ComparisonOperator.CrossedAbove && collector.Detected[1].Direction == ComparisonOperator.CrossedBelow, "Both directions emit in chronological order.");
         Assert(!collector.Detected[0].OverallRuleEvaluation.IsMatch && !collector.Detected[1].OverallRuleEvaluation.IsMatch, "Crossover occurrence does not imply a complete strategy match.");
-        var disabledMonitor = CrossoverTestData.CreateRule(new ConditionGroup(GroupOperator.Any, [impossible, above with { Enabled = false }])).CreateCrossoverMonitor();
+        var disabledMonitor = CrossoverTestData.CreateRule(new ConditionGroup(GroupOperator.Any, [impossible, RuleModelCompatibilityData.DisabledComparison(above)])).CreateCrossoverMonitor();
         var disabledCollector = new CrossoverTestCollector();
         disabledCollector.Attach(disabledMonitor);
         disabledMonitor.Process(CrossoverTestData.CreateMarket("15 minute", CrossoverTestData.CreateCandles("15 minute", 15, 1, 3)), CrossoverTestData.Origin.AddMinutes(30));

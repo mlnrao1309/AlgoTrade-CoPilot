@@ -53,7 +53,7 @@ for (int index = 0; index < lowCandles.Length; index++)
     var candle = lowCandles[index].Candle;
     lowCandles[index] = new CompletedCandle(new Candle(1, "15 minute", candle.Timestamp, candle.Open, candle.High, 4 - index, candle.Close, 10), lowCandles[index].ClosedAt);
 }
-var lowStrength = relativeStrength with { Source = new CandleValue("15 minute", CandleField.Low) };
+var lowStrength = new IndicatorValue(relativeStrength.Function, relativeStrength.Timeframe, relativeStrength.Length, new CandleValue("15 minute", CandleField.Low), relativeStrength.Multiplier);
 Assert(Status(Equal(lowStrength, 0), Market(("15 minute", lowCandles)), 60) == RuleStatus.Matched, "Low source is respected");
 
 var fastAverage = new IndicatorValue(IndicatorFunction.SimpleMovingAverage, "15 minute", 20);
@@ -76,7 +76,7 @@ var unknown = Equal(new IndicatorValue(IndicatorFunction.SimpleMovingAverage, "1
 Assert(Status(new NotCondition(unknown), basicData, 30) == RuleStatus.InsufficientData, "Not must not convert unavailable into match");
 Assert(Status(new ConditionGroup(GroupOperator.All, [unknown, Equal(new NumberValue(1), 2)]), basicData, 30) == RuleStatus.NotMatched, "False dominates unknown in all group");
 Assert(Status(new ConditionGroup(GroupOperator.Any, [unknown, Equal(new NumberValue(1), 1)]), basicData, 30) == RuleStatus.Matched, "True dominates unknown in any group");
-Assert(Status(new ConditionGroup(GroupOperator.All, [Equal(new NumberValue(1), 2) with { Enabled = false }, closeAboveTwo]), basicData, 30) == RuleStatus.Matched, "Disabled condition is omitted");
+Assert(Status(new ConditionGroup(GroupOperator.All, [RuleModelCompatibilityData.DisabledComparison(), closeAboveTwo]), basicData, 30) == RuleStatus.Matched, "Disabled condition is omitted");
 Assert(Status(new ConditionGroup(GroupOperator.Any, [new ConditionGroup(GroupOperator.All, [closeAboveTwo, crossedAboveTwo]), Equal(new NumberValue(0), 1)]), basicData, 30) == RuleStatus.Matched, "Nested group meaning preserved");
 Assert(Status(Equal(new ArithmeticValue(new NumberValue(1), ArithmeticOperator.Divide, new NumberValue(0)), 1), basicData, 30) == RuleStatus.InsufficientData, "Division by zero is unavailable");
 Assert(Status(Equal(new RoundValue(new ArithmeticValue(new NumberValue(5), ArithmeticOperator.Divide, new NumberValue(2))), 3), basicData, 30) == RuleStatus.Matched, "Arithmetic brackets and rounding");
@@ -88,10 +88,10 @@ Assert(Status(Equal(new CountValue(crossedAboveTwo, "15 minute", 3), 1), basicDa
 Assert(Status(Equal(new CountValue(crossedAboveTwo, "15 minute", 3), 1), basicData, 45) == RuleStatus.InsufficientData, "Count does not treat unknown history as false");
 
 var upperBand = new IndicatorValue(IndicatorFunction.BollingerUpperBand, "15 minute", 2, Multiplier: 2);
-var lowerBand = upperBand with { Function = IndicatorFunction.BollingerLowerBand };
+var lowerBand = new IndicatorValue(IndicatorFunction.BollingerLowerBand, upperBand.Timeframe, upperBand.Length, upperBand.Source, upperBand.Multiplier);
 Assert(Status(Equal(upperBand, 14), sampleData, 60) == RuleStatus.Matched, "Upper Bollinger output");
 Assert(Status(Equal(lowerBand, 10), sampleData, 60) == RuleStatus.Matched, "Lower Bollinger output");
-Assert(Status(Equal(upperBand with { Function = IndicatorFunction.BollingerMiddleBand }, 12), sampleData, 60) == RuleStatus.Matched, "Middle Bollinger output");
+Assert(Status(Equal(new IndicatorValue(IndicatorFunction.BollingerMiddleBand, upperBand.Timeframe, upperBand.Length, upperBand.Source, upperBand.Multiplier), 12), sampleData, 60) == RuleStatus.Matched, "Middle Bollinger output");
 Assert(Status(Equal(new IndicatorValue(IndicatorFunction.ExponentialMovingAverage, "15 minute", 1), 13), sampleData, 60) == RuleStatus.Matched, "Exponential average length one");
 
 var trendCandles = new[] { (High: 12m, Low: 8m, Close: 10m), (High: 14m, Low: 10m, Close: 12m), (High: 13m, Low: 9m, Close: 11m), (High: 10m, Low: 6m, Close: 7m), (High: 11m, Low: 7m, Close: 9m), (High: 17m, Low: 13m, Close: 16m) }
@@ -103,12 +103,12 @@ for (int index = 0; index < expectedTrend.Length; index++)
 
 var fullRelativeStrength = new IndicatorValue(IndicatorFunction.RelativeStrengthIndex, "15 minute", 14);
 var fullSmoothedStrength = new IndicatorValue(IndicatorFunction.SimpleMovingAverage, "15 minute", 14, fullRelativeStrength);
-var fullUpperBand = upperBand with { Length = 20 };
+var fullUpperBand = new IndicatorValue(upperBand.Function, upperBand.Timeframe, 20, upperBand.Source, upperBand.Multiplier);
 ConditionDefinition[] requestedRules =
 [
     new ConditionGroup(GroupOperator.All, [new ComparisonCondition(fullRelativeStrength, ComparisonOperator.CrossedAbove, fullSmoothedStrength), new ComparisonCondition(fullRelativeStrength, ComparisonOperator.CrossedAbove, new NumberValue(61.8)), new ComparisonCondition(fullSmoothedStrength, ComparisonOperator.GreaterThanOrEqual, new NumberValue(50))]),
     new ConditionGroup(GroupOperator.All, [new ComparisonCondition(closeValue, ComparisonOperator.GreaterThan, fullUpperBand), new ComparisonCondition(fullRelativeStrength, ComparisonOperator.CrossedAbove, new NumberValue(50))]),
-    new ConditionGroup(GroupOperator.All, [new ComparisonCondition(closeValue, ComparisonOperator.CrossedAbove, superTrend with { Length = 7, Multiplier = 3 }), new ComparisonCondition(closeValue, ComparisonOperator.GreaterThan, fullUpperBand), new ComparisonCondition(fullRelativeStrength, ComparisonOperator.GreaterThan, new NumberValue(50))])
+    new ConditionGroup(GroupOperator.All, [new ComparisonCondition(closeValue, ComparisonOperator.CrossedAbove, new IndicatorValue(superTrend.Function, superTrend.Timeframe, 7, superTrend.Source, 3)), new ComparisonCondition(closeValue, ComparisonOperator.GreaterThan, fullUpperBand), new ComparisonCondition(fullRelativeStrength, ComparisonOperator.GreaterThan, new NumberValue(50))])
 ];
 for (int index = 0; index < requestedRules.Length; index++)
 {
@@ -156,7 +156,7 @@ Assert(Status(equalityAtCurrent, basicData, 30) == RuleStatus.NotMatched, "Curre
 Assert(Status(new ComparisonCondition(closeValue, ComparisonOperator.NotEqual, new IndicatorValue(IndicatorFunction.SimpleMovingAverage, "15 minute", 100)), basicData, 30) == RuleStatus.InsufficientData, "NotEqual cannot match unavailable data");
 var emptyMarket = Market(("15 minute", Array.Empty<CompletedCandle>()));
 Assert(Status(closeAboveTwo, emptyMarket, 30) == RuleStatus.InsufficientData, "Empty completed series is unavailable");
-var differentOffsetCandles = Series("15 minute", 15, 1, 3).Select(candle => candle with { ClosedAt = candle.ClosedAt.ToOffset(TimeSpan.FromHours(5.5)) }).ToArray();
+var differentOffsetCandles = Series("15 minute", 15, 1, 3).Select(candle => new CompletedCandle(candle.Candle, candle.ClosedAt.ToOffset(TimeSpan.FromHours(5.5)))).ToArray();
 Assert(Status(crossedAboveTwo, Market(("15 minute", differentOffsetCandles)), 30) == RuleStatus.Matched, "Timestamp offsets compare the same instants");
 var staticFirst = Bound(new ConditionGroup(GroupOperator.All, [crossedAboveTwo, Equal(new NumberValue(5), 6)]));
 Assert(staticFirst.BindData(basicData).Evaluate(origin.AddMinutes(45)).Explanation.Contains("5 equals 6"), "Ordinary comparisons evaluated first in all group");

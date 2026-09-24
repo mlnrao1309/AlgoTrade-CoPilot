@@ -11,3 +11,4 @@ D:\MyWorkspace\AlgoTrading\AlgoTrading.DataAccess\obj\Debug\net10.0\AlgoTrading.
 D:\MyWorkspace\AlgoTrading\AlgoTrading.DataAccess\obj\Debug\net10.0\refint\AlgoTrading.DataAccess.dll
 D:\MyWorkspace\AlgoTrading\AlgoTrading.DataAccess\obj\Debug\net10.0\AlgoTrading.DataAccess.pdb
 D:\MyWorkspace\AlgoTrading\AlgoTrading.DataAccess\obj\Debug\net10.0\ref\AlgoTrading.DataAccess.dll
+D:\MyWorkspace\AlgoTrading\AlgoTrading.DataAccess\obj\Debug\net10.0\AlgoTrading.DataAccess.sourcelink.json

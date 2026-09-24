@@ -3,8 +3,16 @@
   "WorkspaceRootPath": "D:\\MyWorkspace\\AlgoTrading\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{95B59E99-A754-8EE1-FF55-141C330D6903}|AlgoTrading.csproj|d:\\myworkspace\\algotrading\\algotrading.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
-      "RelativeMoniker": "D:0:0:{95B59E99-A754-8EE1-FF55-141C330D6903}|AlgoTrading.csproj|solutionrelative:algotrading.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+      "AbsoluteMoniker": "D:0:0:{0D756757-4612-C27D-353E-6F39701476B0}|AlgoTrading.Models\\AlgoTrading.Models.csproj|d:\\myworkspace\\algotrading\\algotrading.models\\ruledefinitions\\arithmeticoperator.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{0D756757-4612-C27D-353E-6F39701476B0}|AlgoTrading.Models\\AlgoTrading.Models.csproj|solutionrelative:algotrading.models\\ruledefinitions\\arithmeticoperator.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{0D756757-4612-C27D-353E-6F39701476B0}|AlgoTrading.Models\\AlgoTrading.Models.csproj|d:\\myworkspace\\algotrading\\algotrading.models\\candle.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{0D756757-4612-C27D-353E-6F39701476B0}|AlgoTrading.Models\\AlgoTrading.Models.csproj|solutionrelative:algotrading.models\\candle.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{0D756757-4612-C27D-353E-6F39701476B0}|AlgoTrading.Models\\AlgoTrading.Models.csproj|d:\\myworkspace\\algotrading\\algotrading.models\\candleextensions.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{0D756757-4612-C27D-353E-6F39701476B0}|AlgoTrading.Models\\AlgoTrading.Models.csproj|solutionrelative:algotrading.models\\candleextensions.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -27,15 +35,40 @@
             {
               "$type": "Document",
               "DocumentIndex": 0,
-              "Title": "AlgoTrading.csproj",
-              "DocumentMoniker": "D:\\MyWorkspace\\AlgoTrading\\AlgoTrading.csproj",
-              "RelativeDocumentMoniker": "AlgoTrading.csproj",
-              "ToolTip": "D:\\MyWorkspace\\AlgoTrading\\AlgoTrading.csproj",
-              "RelativeToolTip": "AlgoTrading.csproj",
-              "ViewState": "AgIAACAAAAAAAAAAAAAqwCIAAAAKAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
-              "WhenOpened": "2026-09-24T06:11:11.28Z",
+              "Title": "ArithmeticOperator.cs",
+              "DocumentMoniker": "D:\\MyWorkspace\\AlgoTrading\\AlgoTrading.Models\\RuleDefinitions\\ArithmeticOperator.cs",
+              "RelativeDocumentMoniker": "AlgoTrading.Models\\RuleDefinitions\\ArithmeticOperator.cs",
+              "ToolTip": "D:\\MyWorkspace\\AlgoTrading\\AlgoTrading.Models\\RuleDefinitions\\ArithmeticOperator.cs",
+              "RelativeToolTip": "AlgoTrading.Models\\RuleDefinitions\\ArithmeticOperator.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-09-24T11:41:07.018Z",
               "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Candle.cs",
+              "DocumentMoniker": "D:\\MyWorkspace\\AlgoTrading\\AlgoTrading.Models\\Candle.cs",
+              "RelativeDocumentMoniker": "AlgoTrading.Models\\Candle.cs",
+              "ToolTip": "D:\\MyWorkspace\\AlgoTrading\\AlgoTrading.Models\\Candle.cs",
+              "RelativeToolTip": "AlgoTrading.Models\\Candle.cs",
+              "ViewState": "AgIAAHkAAAAAAAAAAAAowIIAAABjAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-09-24T06:41:02.062Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "CandleExtensions.cs",
+              "DocumentMoniker": "D:\\MyWorkspace\\AlgoTrading\\AlgoTrading.Models\\CandleExtensions.cs",
+              "RelativeDocumentMoniker": "AlgoTrading.Models\\CandleExtensions.cs",
+              "ToolTip": "D:\\MyWorkspace\\AlgoTrading\\AlgoTrading.Models\\CandleExtensions.cs",
+              "RelativeToolTip": "AlgoTrading.Models\\CandleExtensions.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-09-24T06:40:42.844Z"
             }
           ]
         },

@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AlgoTrading.RuleTests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+539734b9adda010d0259e8b583a25944d9966171")]
 [assembly: System.Reflection.AssemblyProductAttribute("AlgoTrading.RuleTests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AlgoTrading.RuleTests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
