@@ -1,46 +1,125 @@
-namespace AlgoTrading.Models.Rules;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 
-public sealed class RuleMarketData
+namespace AlgoTrading.Models.Rules
 {
-    private readonly Dictionary<string, CompletedCandle[]> series = new(StringComparer.Ordinal);
-    public int InstrumentToken { get; }
-
-    public RuleMarketData(int instrumentToken, IReadOnlyDictionary<string, IReadOnlyList<CompletedCandle>> completedSeries)
+    public sealed class RuleMarketData
     {
-        ArgumentNullException.ThrowIfNull(completedSeries);
-        InstrumentToken = instrumentToken;
-        foreach (var entry in completedSeries)
+        private readonly Dictionary<string, CompletedCandle[]> series;
+        private readonly int instrumentToken;
+        private readonly string fingerprint;
+
+        public int InstrumentToken
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(entry.Key);
-            ArgumentNullException.ThrowIfNull(entry.Value);
-            CompletedCandle[] candles = entry.Value.ToArray();
-            for (int candleIndex = 0; candleIndex < candles.Length; candleIndex++)
+            get
             {
-                CompletedCandle current = candles[candleIndex] ?? throw new ArgumentException("A completed candle cannot be null.");
-                if (current.Candle.InstrumentToken != instrumentToken)
-                    throw new ArgumentException("All candles must belong to the requested instrument.");
-                if (candleIndex > 0 && candles[candleIndex - 1].ClosedAt >= current.ClosedAt)
-                    throw new ArgumentException($"Completed candles for '{entry.Key}' must have unique, increasing close times.");
+                return this.instrumentToken;
             }
-            series.Add(entry.Key, candles);
         }
-    }
 
-    internal CompletedCandle[] GetSeries(string timeframe) => series.TryGetValue(timeframe, out var candles)
-        ? candles : Array.Empty<CompletedCandle>();
-    internal bool Contains(string timeframe) => series.ContainsKey(timeframe);
-    internal static int FindCompletedIndex(CompletedCandle[] candles, DateTimeOffset timestamp)
-    {
-        int lowerIndex = 0;
-        int upperIndex = candles.Length - 1;
-        while (lowerIndex <= upperIndex)
+        public string Fingerprint
         {
-            int middleIndex = lowerIndex + (upperIndex - lowerIndex) / 2;
-            if (candles[middleIndex].ClosedAt <= timestamp) lowerIndex = middleIndex + 1;
-            else upperIndex = middleIndex - 1;
+            get
+            {
+                return this.fingerprint;
+            }
         }
-        return upperIndex;
+
+        public RuleMarketData(int instrumentToken, IReadOnlyDictionary<string, IReadOnlyList<CompletedCandle>> completedSeries)
+        {
+            ArgumentNullException.ThrowIfNull(completedSeries);
+            this.instrumentToken = instrumentToken;
+            this.series = new Dictionary<string, CompletedCandle[]>(StringComparer.Ordinal);
+            foreach (KeyValuePair<string, IReadOnlyList<CompletedCandle>> entry in completedSeries)
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(entry.Key);
+                ArgumentNullException.ThrowIfNull(entry.Value);
+                CompletedCandle[] candles = new CompletedCandle[entry.Value.Count];
+                for (int index = 0; index < candles.Length; index++)
+                {
+                    CompletedCandle current = entry.Value[index];
+                    if (current == null || current.Candle.InstrumentToken != instrumentToken)
+                    {
+                        throw new ArgumentException("Candles must be non-null and belong to the requested instrument.");
+                    }
+                    if (index > 0 && candles[index - 1].ClosedAt >= current.ClosedAt)
+                    {
+                        throw new ArgumentException("Completed candles must have unique, increasing close times.");
+                    }
+                    candles[index] = current;
+                }
+                this.series.Add(entry.Key, candles);
+            }
+            this.fingerprint = CalculateFingerprint();
+        }
+
+        internal CompletedCandle[] GetSeries(string timeframe)
+        {
+            CompletedCandle[]? candles;
+            if (this.series.TryGetValue(timeframe, out candles))
+            {
+                return candles;
+            }
+            return Array.Empty<CompletedCandle>();
+        }
+
+        internal bool Contains(string timeframe)
+        {
+            return this.series.ContainsKey(timeframe);
+        }
+
+        internal static int FindCompletedIndex(CompletedCandle[] candles, DateTimeOffset timestamp)
+        {
+            int lower = 0;
+            int upper = candles.Length - 1;
+            while (lower <= upper)
+            {
+                int middle = lower + (upper - lower) / 2;
+                if (candles[middle].ClosedAt <= timestamp)
+                {
+                    lower = middle + 1;
+                }
+                else
+                {
+                    upper = middle - 1;
+                }
+            }
+            return upper;
+        }
+
+        private string CalculateFingerprint()
+        {
+            List<string> keys = new List<string>(this.series.Keys);
+            keys.Sort(StringComparer.Ordinal);
+            using (MemoryStream buffer = new MemoryStream())
+            {
+                using (BinaryWriter writer = new BinaryWriter(buffer, Encoding.UTF8, true))
+                {
+                    writer.Write(this.instrumentToken);
+                    writer.Write(keys.Count);
+                    foreach (string key in keys)
+                    {
+                        writer.Write(key);
+                        writer.Write(this.series[key].Length);
+                        foreach (CompletedCandle item in this.series[key])
+                        {
+                            Candle candle = item.Candle;
+                            writer.Write(candle.TimeframeMinutes);
+                            writer.Write(candle.OpenedAt.UtcTicks);
+                            writer.Write(item.ClosedAt.UtcTicks);
+                            writer.Write(candle.Open);
+                            writer.Write(candle.High);
+                            writer.Write(candle.Low);
+                            writer.Write(candle.Close);
+                            writer.Write(candle.Volume);
+                        }
+                    }
+                }
+                return Convert.ToHexString(SHA256.HashData(buffer.ToArray()));
+            }
+        }
     }
 }
-
-

@@ -1,0 +1,17 @@
+Input,Canonical,Kind,Minutes
+15 minute,15minute,Intraday,15
+15minute,15minute,Intraday,15
+15 min,15minute,Intraday,15
+15m,15minute,Intraday,15
+20 minutes,20minute,Intraday,20
+45minute,45minute,Intraday,45
+1 hour,60minute,Intraday,60
+2hr,120minute,Intraday,120
+60,60minute,Intraday,60
+D,D,Daily,
+day,D,Daily,
+daily,D,Daily,
+W,W,Weekly,
+weekly,W,Weekly,
+M,M,Monthly,
+monthly,M,Monthly,

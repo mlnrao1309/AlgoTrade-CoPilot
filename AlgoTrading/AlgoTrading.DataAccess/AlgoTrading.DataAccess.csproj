@@ -17,4 +17,8 @@
   <ItemGroup>
     <ProjectReference Include="..\AlgoTrading.Models\AlgoTrading.Models.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Sql\001_TradingCalendar.sql" />
+    <EmbeddedResource Include="Sql\DailyPivotProjection.sql" />
+  </ItemGroup>
 </Project>

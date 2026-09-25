@@ -18,11 +18,19 @@ namespace AlgoTrading.Models.Rules
         private DateTimeOffset? lastObservation;
         public event EventHandler<CrossoverEventArgs>? CrossoverDetected;
         public event EventHandler<CrossoverEventArgs>? CrossoverNextCandleAvailable;
-        internal RuleCrossoverMonitor(BoundRule rule, RuleDefinition definition, DateTimeOffset? startAfter)
+        private readonly IndicatorCalculationVersion calculationVersion;
+        private readonly string dataRevision;
+        private readonly IndicatorCalculationCache cache;
+
+        internal RuleCrossoverMonitor(BoundRule rule, RuleDefinition definition, DateTimeOffset? startAfter,
+            IndicatorCalculationVersion version, string dataRevision, IndicatorCalculationCache cache)
         {
             this.rule = rule;
             this.definition = definition;
             this.startAfter = startAfter;
+            this.calculationVersion = version;
+            this.dataRevision = dataRevision;
+            this.cache = cache;
             subscriptions = new CrossoverDiscovery().Discover(definition);
         }
 
@@ -37,7 +45,7 @@ namespace AlgoTrading.Models.Rules
             BeginProcessing(data, asOf);
             try
             {
-                BoundRuleExecution execution = rule.BindData(data);
+                BoundRuleExecution execution = rule.BindData(data, this.cache, this.dataRevision, this.calculationVersion);
                 RuleEvaluation evaluation = execution.Evaluate(asOf);
                 CrossoverSnapshotBuilder builder = new CrossoverSnapshotBuilder(data, execution);
                 List<CrossoverOccurrence> detected = new List<CrossoverOccurrence>();

@@ -1,4 +1,7 @@
-bin/
-obj/
+**/bin/
+**/obj/
 .vs/
 *.user
+*.dtbcache.v2
+*.binlog
+gitstatus_*

@@ -33,12 +33,36 @@ namespace AlgoTrading.Models.Rules
 
         public RuleCrossoverMonitor CreateCrossoverMonitor(DateTimeOffset? startAfter = null)
         {
-            return new RuleCrossoverMonitor(this, definition, startAfter);
+            return CreateCrossoverMonitor(IndicatorCalculationVersion.LegacyV1, "monitor-snapshot", new IndicatorCalculationCache(), startAfter);
+        }
+
+        public RuleCrossoverMonitor CreateCrossoverMonitor(IndicatorCalculationVersion version, string dataRevision,
+            IndicatorCalculationCache cache, DateTimeOffset? startAfter = null)
+        {
+            ArgumentNullException.ThrowIfNull(cache);
+            ArgumentException.ThrowIfNullOrWhiteSpace(dataRevision);
+            if (!Enum.IsDefined(version))
+            {
+                throw new ArgumentOutOfRangeException(nameof(version));
+            }
+            return new RuleCrossoverMonitor(this, definition, startAfter, version, dataRevision, cache);
         }
 
         public BoundRuleExecution BindData(RuleMarketData data)
         {
+            return BindData(data, new IndicatorCalculationCache(), "legacy-snapshot", IndicatorCalculationVersion.LegacyV1);
+        }
+
+        public BoundRuleExecution BindData(RuleMarketData data, IndicatorCalculationCache cache,
+            string dataRevision, IndicatorCalculationVersion version)
+        {
             ArgumentNullException.ThrowIfNull(data);
+            ArgumentNullException.ThrowIfNull(cache);
+            ArgumentException.ThrowIfNullOrWhiteSpace(dataRevision);
+            if (!Enum.IsDefined(version))
+            {
+                throw new ArgumentOutOfRangeException(nameof(version));
+            }
             foreach (string timeframe in Plan.RequiredTimeframes)
             {
                 if (!data.Contains(timeframe))
@@ -46,7 +70,7 @@ namespace AlgoTrading.Models.Rules
                     throw new ArgumentException($"Supply completed candles for '{timeframe}'.", nameof(data));
                 }
             }
-            return new BoundRuleExecution(definition, data);
+            return new BoundRuleExecution(definition, data, cache, dataRevision, version);
         }
     }
 }

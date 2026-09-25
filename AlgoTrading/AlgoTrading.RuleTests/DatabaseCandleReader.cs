@@ -8,9 +8,17 @@ internal sealed class DatabaseCandleReader
 {
     internal async Task<IReadOnlyList<DatabaseCandleRow>> ReadAsync(DatabaseCrossoverSettings settings, DateTimeOffset asOf)
     {
-        TimeZoneInfo timestampTimezone = TimeZoneInfo.FindSystemTimeZoneById(settings.TimestampTimeZoneId);
-        var connectionSettings = new SqlConnectionStringBuilder(settings.ConnectionString) { ConnectTimeout = 15 };
-        await using var connection = new SqlConnection(connectionSettings.ConnectionString);
+        if (settings.TimestampTimeZoneId != "India Standard Time" && settings.TimestampTimeZoneId != "Asia/Kolkata")
+        {
+            throw new InvalidOperationException("Database candle timestamps must use IST.");
+        }
+        if (!settings.TimestampRepresentsCandleOpen)
+        {
+            throw new InvalidOperationException("Database candle timestamps must represent candle starts.");
+        }
+        SqlConnectionStringBuilder connectionSettings = new SqlConnectionStringBuilder(settings.ConnectionString);
+        connectionSettings.ConnectTimeout = 15;
+        await using SqlConnection connection = new SqlConnection(connectionSettings.ConnectionString);
         await connection.OpenAsync();
         await using SqlCommand command = connection.CreateCommand();
         command.CommandTimeout = 120;
@@ -23,7 +31,7 @@ internal sealed class DatabaseCandleReader
             """;
         command.Parameters.Add("@InstrumentToken", SqlDbType.Int).Value = settings.InstrumentToken;
         command.Parameters.Add("@Timeframe", SqlDbType.VarChar, 30).Value = settings.Timeframe;
-        var rows = new List<DatabaseCandleRow>();
+        List<DatabaseCandleRow> rows = new List<DatabaseCandleRow>();
         await using SqlDataReader reader = await command.ExecuteReaderAsync();
         DateTimeOffset? previousCloseTime = null;
         int excludedIncompleteRows = 0;
@@ -34,21 +42,36 @@ internal sealed class DatabaseCandleReader
             decimal closingPrice = Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
             decimal highestPrice = Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture);
             decimal lowestPrice = Convert.ToDecimal(reader.GetValue(4), CultureInfo.InvariantCulture);
-            long? openInterest = reader.IsDBNull(5) ? null : Convert.ToInt64(reader.GetValue(5), CultureInfo.InvariantCulture);
+            long? openInterest = null;
+            if (!reader.IsDBNull(5))
+            {
+                openInterest = Convert.ToInt64(reader.GetValue(5), CultureInfo.InvariantCulture);
+            }
             long volume = Convert.ToInt64(reader.GetValue(6), CultureInfo.InvariantCulture);
             DateTime timestamp = DateTime.SpecifyKind(reader.GetDateTime(7), DateTimeKind.Unspecified);
-            DateTime? lastUpdated = reader.IsDBNull(8) ? null : reader.GetDateTime(8);
+            DateTime? lastUpdated = null;
+            if (!reader.IsDBNull(8))
+            {
+                lastUpdated = reader.GetDateTime(8);
+            }
             string timeframe = reader.GetString(9);
-            DateTimeOffset timestampInstant = new(TimeZoneInfo.ConvertTimeToUtc(timestamp, timestampTimezone));
-            DateTimeOffset closedAt = settings.TimestampRepresentsCandleOpen
-                ? timestampInstant.AddMinutes(settings.CandleLengthMinutes) : timestampInstant;
-            if (closedAt > asOf) { excludedIncompleteRows++; continue; }
+            DateTimeOffset timestampInstant = MarketTimestamp.FromDatabase(timestamp);
+            DateTimeOffset closedAt = timestampInstant.AddMinutes(settings.CandleLengthMinutes);
+            if (closedAt > asOf)
+            {
+                excludedIncompleteRows++;
+                continue;
+            }
             if (previousCloseTime.HasValue && closedAt <= previousCloseTime.Value)
+            {
                 throw new InvalidOperationException($"Duplicate or unordered database candle at {timestamp:O}; resolve the source data before replay.");
+            }
             if (highestPrice < lowestPrice || highestPrice < Math.Max(openingPrice, closingPrice)
                 || lowestPrice > Math.Min(openingPrice, closingPrice) || volume < 0)
+            {
                 throw new InvalidOperationException($"Invalid candle prices or volume at {timestamp:O}.");
-            var candle = new Candle(instrumentToken, settings.Timeframe, timestampInstant.UtcDateTime,
+            }
+            Candle candle = new Candle(instrumentToken, settings.Timeframe, timestamp,
                 openingPrice, highestPrice, lowestPrice, closingPrice, volume);
             rows.Add(new DatabaseCandleRow(instrumentToken, openingPrice, closingPrice, highestPrice, lowestPrice,
                 openInterest, volume, timestamp, lastUpdated, timeframe, new CompletedCandle(candle, closedAt)));

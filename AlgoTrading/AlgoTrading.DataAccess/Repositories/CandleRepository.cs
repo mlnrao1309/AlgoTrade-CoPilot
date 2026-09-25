@@ -2,7 +2,6 @@ using AlgoTrading.DataAccess.Data;
 using AlgoTrading.DataAccess.Entities;
 using AlgoTrading.Models;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,144 +12,123 @@ namespace AlgoTrading.DataAccess.Repositories
 {
     public class CandleRepository : ICandleRepository
     {
-        private readonly AlgoTradingDbContext _db;
+        private readonly AlgoTradingDbContext database;
         private const int DefaultLimit = 1000;
 
         public CandleRepository(AlgoTradingDbContext db)
         {
-            _db = db ?? throw new ArgumentNullException(nameof(db));
+            if (db == null)
+            {
+                throw new ArgumentNullException(nameof(db));
+            }
+            this.database = db;
         }
-
-        //public async Task<List<Candle>> GetCandlesAsync(uint instrumentToken, string reqTimeFrame, CancellationToken cancellationToken = default)
-        //{   
-        //    string getTimeFrame = reqTimeFrame switch
-        //    {
-        //        "D" => "day",
-        //        "W" => "week",
-        //        "M" => "month",
-        //        _ => "minute"
-        //    };
-        //    var query = _db.Candles.AsNoTracking().Where(c => c.InstrumentToken == instrumentToken && c.Timeframe == getTimeFrame).
-        //        Select(e => new Candle((int)instrumentToken, e.Timeframe, e.Timestamp, e.Open, e.High, e.Low, e.Close, e.Volume));
-
-        //    var baseCandles = await query.ToListAsync(cancellationToken);
-
-        //    var aggregated = baseCandles
-        //         .GroupBy(c =>
-        //         {
-        //             var ticks = c.Timestamp.Ticks;
-        //             var fiveMinuteTicks = TimeSpan.FromMinutes(Convert.ToInt32(reqTimeFrame)).Ticks;
-        //             return new DateTime(ticks - (ticks % fiveMinuteTicks), c.Timestamp.Kind);
-        //         })
-        //         .Select(group =>
-        //         {
-        //             var orderedGroup = group.OrderBy(c => c.Timestamp).ToList();
-        //             return new Candle(
-        //                 (int)instrumentToken,
-        //                 reqTimeFrame,
-        //                 group.Key,
-        //                 orderedGroup.First().Open,
-        //                 group.Max(c => c.High),
-        //                 group.Min(c => c.Low),
-        //                 orderedGroup.Last().Close,
-        //                 (ulong)group.Sum(g => (long)g.Volume) // Handled cleanly via casting to prevent ulong overflow errors during sum
-        //             );
-        //         })
-        //         .OrderBy(c => c.Timestamp)
-        //         .ToList();
-
-        //    return aggregated;
-        //}
-
-
 
         public async Task<List<Candle>> GetCandlesAsync(uint instrumentToken, string timeframeMinutes = "minute", DateTime? from = null, DateTime? to = null, int? limit = null, CancellationToken cancellationToken = default)
         {
-            if (from.HasValue && to.HasValue && from > to) throw new ArgumentException("from must be <= to");
-
-            var query = _db.Candles.AsNoTracking().Where(c => c.InstrumentToken == instrumentToken && c.Timeframe == timeframeMinutes);
-
+            IQueryable<CandleEntity> query = from entity in this.database.Candles.AsNoTracking()
+                                            where entity.InstrumentToken == instrumentToken && entity.Timeframe == timeframeMinutes
+                                            select entity;
+            DateTime? firstTimestamp = null;
+            DateTime? lastTimestamp = null;
             if (from.HasValue)
             {
-                var fromUtc = DateTime.SpecifyKind(from.Value, DateTimeKind.Utc);
-                query = query.Where(c => c.Timestamp >= fromUtc);
+                firstTimestamp = MarketTimestamp.ToDatabase(MarketTimestamp.FromDateTime(from.Value));
+                DateTime fromDatabase = firstTimestamp.Value;
+                query = from entity in query where entity.Timestamp >= fromDatabase select entity;
             }
-
             if (to.HasValue)
             {
-                var toUtc = DateTime.SpecifyKind(to.Value, DateTimeKind.Utc);
-                query = query.Where(c => c.Timestamp <= toUtc);
+                lastTimestamp = MarketTimestamp.ToDatabase(MarketTimestamp.FromDateTime(to.Value));
+                DateTime toDatabase = lastTimestamp.Value;
+                query = from entity in query where entity.Timestamp <= toDatabase select entity;
+            }
+            if (firstTimestamp.HasValue && lastTimestamp.HasValue && firstTimestamp.Value > lastTimestamp.Value)
+            {
+                throw new ArgumentException("from must be <= to");
             }
 
-            // If limit provided, take the most recent 'limit' rows
+            int maximumRows = 0;
             if (limit.HasValue && limit.Value > 0)
             {
-                var list = await query.OrderByDescending(c => c.Timestamp)
-                    .Take(limit.Value)
-                    .Select(e => new Candle((int)instrumentToken, e.Timeframe, e.Timestamp, e.Open, e.High, e.Low, e.Close, e.Volume))                    //InstrumentToken = e.InstrumentToken, Timeframe = e.Timeframe, Timestamp = e.Timestamp, Open = (decimal)e.Open, High = (decimal)e.High, 
-                    .ToListAsync(cancellationToken);
-
-                list.Reverse();
-
-                return new List<Candle>();
+                maximumRows = limit.Value;
             }
-
-            // No explicit limit - if no date filters, apply default limit to avoid huge scans
-            if (!from.HasValue && !to.HasValue)
+            else if (!from.HasValue && !to.HasValue)
             {
-                var list = await query.OrderByDescending(c => c.Timestamp)
-                    .Take(DefaultLimit)
-                    .Select(e => new Candle((int)instrumentToken, e.Timeframe, e.Timestamp, e.Open, e.High, e.Low, e.Close, e.Volume))
-                    .ToListAsync(cancellationToken);
-
-                list.Reverse();
-                return list;
+                maximumRows = DefaultLimit;
             }
 
-            // Date range provided and no explicit limit - return all matching rows (could be limited by DB)
-            return await query.OrderBy(c => c.Timestamp)
-                .Select(e => new Candle((int)e.InstrumentToken, e.Timeframe, e.Timestamp, e.Open, e.High, e.Low, e.Close, e.Volume))
-                .ToListAsync(cancellationToken);
+            List<CandleEntity> rows;
+            if (maximumRows > 0)
+            {
+                query = from entity in query orderby entity.Timestamp descending select entity;
+                rows = await query.Take(maximumRows).ToListAsync(cancellationToken);
+                rows.Reverse();
+            }
+            else
+            {
+                query = from entity in query orderby entity.Timestamp select entity;
+                rows = await query.ToListAsync(cancellationToken);
+            }
+
+            List<Candle> candles = new List<Candle>();
+            foreach (CandleEntity row in rows)
+            {
+                candles.Add(new Candle(row.InstrumentToken, row.Timeframe, row.Timestamp,
+                    row.Open, row.High, row.Low, row.Close, row.Volume));
+            }
+            return candles;
         }
 
         public async Task AddAsync(Candle candle, CancellationToken cancellationToken = default)
         {
-            var entity = new CandleEntity
-            {
-                InstrumentToken = candle.InstrumentToken,
-                Timeframe = candle.TimeframeMinutes,
-                Timestamp = DateTime.SpecifyKind(candle.Timestamp, DateTimeKind.Utc),
-                Open = candle.Open,
-                High = candle.High,
-                Low = candle.Low,
-                Close = candle.Close,
-                Volume = candle.Volume
-            };
-
-            _db.Candles.Add(entity);
-            await _db.SaveChangesAsync(cancellationToken);
-        }
-
-        public async Task UpdateAsync(Candle candle, CancellationToken cancellationToken = default)
-        {
-            var entity = await _db.Candles.FirstOrDefaultAsync(c => c.InstrumentToken == candle.InstrumentToken && c.Timeframe == candle.TimeframeMinutes && c.Timestamp == candle.Timestamp, cancellationToken);
-            if (entity == null) throw new InvalidOperationException("Candle not found");
-
+            CandleEntity entity = new CandleEntity();
+            entity.InstrumentToken = candle.InstrumentToken;
+            entity.Timeframe = candle.TimeframeMinutes;
+            entity.Timestamp = MarketTimestamp.ToDatabase(candle.OpenedAt);
             entity.Open = candle.Open;
             entity.High = candle.High;
             entity.Low = candle.Low;
             entity.Close = candle.Close;
             entity.Volume = candle.Volume;
+            this.database.Candles.Add(entity);
+            await this.database.SaveChangesAsync(cancellationToken);
+        }
 
-            await _db.SaveChangesAsync(cancellationToken);
+        public async Task UpdateAsync(Candle candle, CancellationToken cancellationToken = default)
+        {
+            DateTime databaseTimestamp = MarketTimestamp.ToDatabase(candle.OpenedAt);
+            IQueryable<CandleEntity> query = from row in this.database.Candles
+                                            where row.InstrumentToken == candle.InstrumentToken
+                                                && row.Timeframe == candle.TimeframeMinutes && row.Timestamp == databaseTimestamp
+                                            select row;
+            CandleEntity? entity = await query.FirstOrDefaultAsync(cancellationToken);
+            if (entity == null)
+            {
+                throw new InvalidOperationException("Candle not found");
+            }
+            entity.Open = candle.Open;
+            entity.High = candle.High;
+            entity.Low = candle.Low;
+            entity.Close = candle.Close;
+            entity.Volume = candle.Volume;
+            await this.database.SaveChangesAsync(cancellationToken);
         }
 
         public async Task DeleteAsync(uint instrumentToken, string timeframeMinutes, DateTime timestamp, CancellationToken cancellationToken = default)
         {
-            var entity = await _db.Candles.FirstOrDefaultAsync(c => c.InstrumentToken == instrumentToken && c.Timeframe == timeframeMinutes && c.Timestamp == timestamp, cancellationToken);
-            if (entity == null) return;
-            _db.Candles.Remove(entity);
-            await _db.SaveChangesAsync(cancellationToken);
+            DateTime databaseTimestamp = MarketTimestamp.ToDatabase(MarketTimestamp.FromDateTime(timestamp));
+            IQueryable<CandleEntity> query = from row in this.database.Candles
+                                            where row.InstrumentToken == instrumentToken
+                                                && row.Timeframe == timeframeMinutes && row.Timestamp == databaseTimestamp
+                                            select row;
+            CandleEntity? entity = await query.FirstOrDefaultAsync(cancellationToken);
+            if (entity == null)
+            {
+                return;
+            }
+            this.database.Candles.Remove(entity);
+            await this.database.SaveChangesAsync(cancellationToken);
         }
     }
 }

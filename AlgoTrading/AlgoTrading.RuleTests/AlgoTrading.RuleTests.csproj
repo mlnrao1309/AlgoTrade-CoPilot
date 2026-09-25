@@ -12,6 +12,7 @@
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.18" />
   </ItemGroup>
   <ItemGroup>
+    <None Update="Fixtures\*.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Update="database-test.settings.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
