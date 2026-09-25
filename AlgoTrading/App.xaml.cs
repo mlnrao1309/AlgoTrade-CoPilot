@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using AlgoTrading.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration.Json;
+using AlgoTrading.DataAccess.Calendar;
 
 
 namespace AlgoTrading
@@ -70,6 +71,18 @@ namespace AlgoTrading
 
             }
             services.AddScoped<AlgoTrading.DataAccess.Repositories.ICandleRepository, AlgoTrading.DataAccess.Repositories.CandleRepository>();
+            if (!string.IsNullOrWhiteSpace(connectionString))
+            {
+                services.AddSingleton<ITradingCalendarRepository>(
+                    new SqlTradingCalendarRepository(connectionString, commandTimeoutSeconds: 30));
+                services.AddSingleton<ITradingCalendarProvider, RepositoryTradingCalendarProvider>();
+
+                IConfigurationSection calendar = configuration.GetSection("TradingCalendar");
+                services.AddSingleton(new TradingCalendarSelection(
+                    calendar["ExchangeCode"] ?? "NSE",
+                    calendar["SegmentCode"] ?? "CM",
+                    calendar["Revision"] ?? throw new InvalidOperationException("TradingCalendar:Revision is required.")));
+            }
 
             _serviceProvider = services.BuildServiceProvider();
 

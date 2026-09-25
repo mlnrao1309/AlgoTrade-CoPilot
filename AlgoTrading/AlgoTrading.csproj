@@ -29,7 +29,6 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="AlgoTrading.Models\AlgoTrading.Models.csproj" />
     <ProjectReference Include="AlgoTrading.DataAccess\AlgoTrading.DataAccess.csproj" />
   </ItemGroup>
 </Project>

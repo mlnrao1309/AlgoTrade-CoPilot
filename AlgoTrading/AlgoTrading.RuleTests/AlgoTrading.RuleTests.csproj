@@ -8,14 +8,13 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.6" />
-    <!-- Keep the SqlClient caching dependency aligned with the installed patch family. -->
-    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.18" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.12" />
   </ItemGroup>
   <ItemGroup>
     <None Update="Fixtures\*.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Update="database-test.settings.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\AlgoTrading.Models\AlgoTrading.Models.csproj" />
+    <ProjectReference Include="..\AlgoTrading.DataAccess\AlgoTrading.DataAccess.csproj" />
   </ItemGroup>
 </Project>

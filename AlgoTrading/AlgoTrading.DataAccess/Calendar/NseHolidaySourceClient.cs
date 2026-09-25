@@ -24,12 +24,15 @@ namespace AlgoTrading.DataAccess.Calendar
 
         public async Task<HolidaySourceReport> FetchAsync(string segmentCode, int year, CancellationToken cancellationToken = default)
         {
-            using HttpResponseMessage response = await this.client.GetAsync(this.endpoint, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, this.endpoint);
+            request.Headers.Accept.ParseAdd("application/json");
+            using HttpResponseMessage response = await this.client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
             await response.Content.LoadIntoBufferAsync(8000000, cancellationToken);
             string content = await response.Content.ReadAsStringAsync(cancellationToken);
+            string contentType = response.Content.Headers.ContentType?.MediaType ?? "application/json";
             CalendarSourceDocument source = new CalendarSourceDocument(Guid.NewGuid(), "NSE", this.endpoint,
-                DateTimeOffset.UtcNow, "application/json", content);
+                DateTimeOffset.UtcNow, contentType, content);
             return Parse(source, segmentCode, year);
         }
 

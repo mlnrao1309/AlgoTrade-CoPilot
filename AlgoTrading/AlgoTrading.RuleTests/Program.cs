@@ -27,6 +27,8 @@ internal static class Program
         candleTimeTests.Run();
         TradingCalendarTests calendarTests = new TradingCalendarTests();
         calendarTests.Run();
+        CalendarImportTests importTests = new CalendarImportTests();
+        await importTests.RunAsync();
         TimeframeNormalizationTests timeframeTests = new TimeframeNormalizationTests();
         timeframeTests.Run();
         CandleAggregationTests aggregationTests = new CandleAggregationTests();
