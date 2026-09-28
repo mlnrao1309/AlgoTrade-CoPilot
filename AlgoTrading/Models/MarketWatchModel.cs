@@ -1,127 +1,312 @@
-﻿using AlgoTrading.Helpers;
-using AlgoTrading.ViewModels;
-using Microsoft.Web.WebView2.Core;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Security.Policy;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-
 namespace AlgoTrading.Models
 {
-    internal class MarketWatchModel
+    using AlgoTrading.Services;
+    using AlgoTrading.ViewModels;
+    using Microsoft.Extensions.DependencyInjection;
+    using Microsoft.Web.WebView2.Core;
+    using System;
+    using System.Collections.Generic;
+    using System.Globalization;
+    using System.IO;
+    using System.Text.Json;
+    using System.Text.RegularExpressions;
+    using System.Threading;
+    using System.Threading.Tasks;
+
+    /// <summary>
+    /// Owns the instrument universe observed from the embedded Kite market-watch payload.
+    /// Instrument-master persistence is delegated to IInstrumentImportService so exactly one code path writes
+    /// Instruments_EQ/Instruments_FO, and every write is awaited: nothing is fired and forgotten.
+    /// </summary>
+    internal sealed class MarketWatchModel
     {
-        public event EventHandler MarketWatchDataUpdated;
+        private const string MarketWatchUriMarker = "items?uid=marketwatch";
+        private readonly IServiceScopeFactory scopeFactory;
+        private readonly Dictionary<string, int> subscriptions = new Dictionary<string, int>(StringComparer.Ordinal);
+        private readonly object subscriptionLock = new object();
 
-        private Dictionary<string, int> _marketWatchData = new Dictionary<string, int>();
-        public Dictionary<string, int> ActiveSubscriptions { get => _marketWatchData; }
-        public string BaseDirectotry { get => System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "MarketWatch"); }
-
-        public string[] MarketWatchFiles { get => System.IO.Directory.GetFiles(BaseDirectotry, "*.json"); }
-        internal StatusMessage ProcessWebResourceResponseReceived(CoreWebView2WebResourceRequest request, CoreWebView2WebResourceResponseView response)
+        public MarketWatchModel(IServiceScopeFactory scopeFactory, string connectionString)
         {
-            StatusMessage msg = new StatusMessage("Market Watch", "Processing web resource response received.", StatusMessageType.Info);
-            if (request.Uri.Contains("items?uid=marketwatch"))
+            if (scopeFactory == null)
             {
-                // Match one or more digits
-                var match = Regex.Match(request.Uri, @"\d+");
-                int number = 0;
-                if (match.Success)
+                throw new ArgumentNullException(nameof(scopeFactory));
+            }
+
+            this.scopeFactory = scopeFactory;
+            this.ConnectionString = connectionString ?? string.Empty;
+        }
+
+        public event EventHandler? MarketWatchDataUpdated;
+
+        public string ConnectionString { get; set; }
+
+        public string BaseDirectory
+        {
+            get
+            {
+                return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "MarketWatch");
+            }
+        }
+
+        public string[] MarketWatchFiles
+        {
+            get
+            {
+                string directory = this.BaseDirectory;
+                if (!Directory.Exists(directory))
                 {
-                    number = int.Parse(match.Value); // Result: 10
+                    return new string[0];
                 }
+
+                return Directory.GetFiles(directory, "*.json");
+            }
+        }
+
+        /// <summary>Returns an immutable snapshot so callers cannot mutate shared state.</summary>
+        public IReadOnlyDictionary<string, int> ActiveSubscriptions
+        {
+            get
+            {
+                lock (this.subscriptionLock)
+                {
+                    return new Dictionary<string, int>(this.subscriptions, StringComparer.Ordinal);
+                }
+            }
+        }
+
+        public int ActiveSubscriptionCount
+        {
+            get
+            {
+                lock (this.subscriptionLock)
+                {
+                    return this.subscriptions.Count;
+                }
+            }
+        }
+
+        public void ClearSubscriptions()
+        {
+            lock (this.subscriptionLock)
+            {
+                this.subscriptions.Clear();
+            }
+        }
+
+        /// <summary>Persists one observed market-watch payload and records its subscriptions.</summary>
+        internal async Task<StatusMessage> ProcessWebResourceResponseReceivedAsync(CoreWebView2WebResourceRequest request,
+            CoreWebView2WebResourceResponseView response, CancellationToken cancellationToken = default)
+        {
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request));
+            }
+
+            if (response == null)
+            {
+                throw new ArgumentNullException(nameof(response));
+            }
+
+            if (!request.Uri.Contains(MarketWatchUriMarker, StringComparison.OrdinalIgnoreCase))
+            {
+                return new StatusMessage("Market Watch", "Ignored resource " + request.Uri, StatusMessageType.Warning);
+            }
+
+            using (Stream content = await response.GetContentAsync())
+            {
+                if (content == null)
+                {
+                    return new StatusMessage("Market Watch", "The market-watch response had no readable content.", StatusMessageType.Warning);
+                }
+
+                int watchListNumber = ReadWatchListNumber(request.Uri);
+                using (StreamReader reader = new StreamReader(content))
+                {
+                    string json = await reader.ReadToEndAsync();
+                    StatusMessage imported = await this.ImportAsync(json, cancellationToken);
+                    return new StatusMessage(imported.Title, "Watch list " + watchListNumber + ": " + imported.Details, imported.Type);
+                }
+            }
+        }
+
+        /// <summary>Loads every saved market-watch file through the same import path as the live payload.</summary>
+        public async Task<StatusMessage> LoadOfflineMarketWatchAsync(int watchListNumber = -1, CancellationToken cancellationToken = default)
+        {
+            string[] files = this.MarketWatchFiles;
+            if (files.Length == 0)
+            {
+                return new StatusMessage("Market Watch", "No market-watch files were found in " + this.BaseDirectory + ".", StatusMessageType.Warning);
+            }
+
+            List<string> failures = new List<string>();
+            int importedFiles = 0;
+            foreach (string file in files)
+            {
                 try
                 {
-                    var streamTask = response.GetContentAsync();
-                    // 2. Chain the continuation block
-                    var readTask = streamTask.ContinueWith(io =>
+                    string content = await File.ReadAllTextAsync(file, cancellationToken);
+                    if (string.IsNullOrWhiteSpace(content))
                     {
-                        if (io.IsCompletedSuccessfully) // Modern replacement for IsCompleted
-                        {
-                            // 3. Keep disposables inside the callback boundary
-                            using (var stream = io.Result)
-                                if (stream is not null)
-                                    using (var reader = new System.IO.StreamReader(stream))
-                                    {
-                                        string jsonResponse = reader.ReadToEnd();// Return it out of the task scope
+                        continue;
+                    }
 
-                                        using (JsonDocument doc = JsonDocument.Parse(jsonResponse))
-                                        {
-
-                                            var root = doc.RootElement;
-                                            string name = doc.RootElement.GetProperty("data").GetProperty("name").GetString();
-                                            var tradingItems = root.GetProperty("data").GetProperty("groups")[0].GetProperty("items");
-                                            if (tradingItems.GetArrayLength() >= 0)
-                                            FileIO.SaveJsonToFileAsync(tradingItems.ToString(), BaseDirectotry, $"marketwatch{number}.json").Wait();
-                                            msg = new StatusMessage("Market Watch", "Successfully saved market watch data.", StatusMessageType.Info);
-                                        }
-                                    }
-                        }
-                        else if (io.IsFaulted)
-                        {
-
-                            msg = new StatusMessage("Market Watch Exception", io.Exception.Message, StatusMessageType.Error);
-                            //Application.Current?.Dispatcher?.Invoke(() => StatusMessages.Add(msg));
-
-                        }
-                    });
+                    await this.ImportAsync(content, cancellationToken);
+                    importedFiles++;
                 }
-                catch (Exception ex)
+                catch (Exception exception)
                 {
-                    Debug.WriteLine(ex.StackTrace);
+                    failures.Add(Path.GetFileName(file) + ": " + exception.Message);
                 }
             }
-            OnMarketWatchDataUpdated();
-            return msg;
+
+            string details = "Watch list " + watchListNumber.ToString(CultureInfo.InvariantCulture) + ": imported "
+                + importedFiles.ToString(CultureInfo.InvariantCulture) + " of " + files.Length.ToString(CultureInfo.InvariantCulture)
+                + " market-watch file(s); " + this.ActiveSubscriptionCount.ToString(CultureInfo.InvariantCulture) + " subscription(s) known.";
+            if (failures.Count != 0)
+            {
+                return new StatusMessage("Market Watch", details + " Failures: " + string.Join(" | ", failures), StatusMessageType.Error);
+            }
+
+            return new StatusMessage("Market Watch", details, StatusMessageType.Info);
         }
 
-        public async Task GetOfflineMarketWatchDataAsync(int watchListNumber = -1)
+        private async Task<StatusMessage> ImportAsync(string json, CancellationToken cancellationToken)
         {
-            //_marketWatchData.Clear(); -- One time clear is not needed as we are adding new data to the existing dictionary. If you want to clear the data, you can uncomment this line.
-            try
+            using (JsonDocument document = JsonDocument.Parse(json))
             {
-                string[] filePath = watchListNumber == -1 ?
-                Directory.GetFiles(BaseDirectotry, "*.json")
-                : Directory.GetFiles(System.IO.Path.Combine(BaseDirectotry, $"marketwatch{watchListNumber}.json"));
-
-                foreach (var file in filePath)
+                List<string> itemTexts = ReadItemTexts(document.RootElement);
+                if (itemTexts.Count == 0)
                 {
-                    if (System.IO.File.Exists(file))
+                    return new StatusMessage("Market Watch", "The payload contained no instrument rows; nothing was persisted.", StatusMessageType.Warning);
+                }
+
+                string instrumentArray = "[" + string.Join(",", itemTexts) + "]";
+                using (JsonDocument instruments = JsonDocument.Parse(instrumentArray))
+                {
+                    int recorded = 0;
+                    foreach (JsonElement instrument in instruments.RootElement.EnumerateArray())
                     {
-                        string fileContent = await System.IO.File.ReadAllTextAsync(file);
-                        if (!string.IsNullOrEmpty(fileContent))
+                        string symbol;
+                        int token;
+                        if (this.TryReadSubscription(instrument, out symbol, out token))
                         {
-
-                            using (JsonDocument doc = JsonDocument.Parse(fileContent))
-                            {
-                                var marketWatchItems = doc.RootElement.EnumerateArray().Select(x => new { Tradingsymbol = x.GetProperty("tradingsymbol").GetString(), InstrumentToken = x.GetProperty("instrument_token").GetInt32() });
-                                foreach (var item in marketWatchItems)
-                                {
-                                    _marketWatchData.Add(item.Tradingsymbol, item.InstrumentToken);
-                                }
-                            }
-
+                            this.SetSubscription(symbol, token);
+                            recorded++;
                         }
                     }
+
+                    using (IServiceScope scope = this.scopeFactory.CreateScope())
+                    {
+                        IInstrumentImportService importer = scope.ServiceProvider.GetRequiredService<IInstrumentImportService>();
+                        await importer.ProcessInstrumentsJsonAsync(instrumentArray);
+                    }
+
+                    this.RaiseUpdated();
+                    return new StatusMessage("Market Watch", "Instrument master persisted "
+                        + itemTexts.Count.ToString(CultureInfo.InvariantCulture) + " row(s); "
+                        + recorded.ToString(CultureInfo.InvariantCulture) + " subscription(s) recorded.", StatusMessageType.Info);
                 }
-                if (_marketWatchData.Count > 0)
-                {
-                    OnMarketWatchDataUpdated();
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex.StackTrace);
             }
         }
 
-        protected virtual void OnMarketWatchDataUpdated()
+        /// <summary>Accepts both shapes seen in practice: a bare item array and Kite's data.groups[].items envelope.</summary>
+        private static List<string> ReadItemTexts(JsonElement root)
         {
-            MarketWatchDataUpdated?.Invoke(this, EventArgs.Empty);
+            List<string> itemTexts = new List<string>();
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                foreach (JsonElement item in root.EnumerateArray())
+                {
+                    itemTexts.Add(item.GetRawText());
+                }
+
+                return itemTexts;
+            }
+
+            JsonElement data;
+            JsonElement groups;
+            if (!root.TryGetProperty("data", out data) || !data.TryGetProperty("groups", out groups)
+                || groups.ValueKind != JsonValueKind.Array)
+            {
+                return itemTexts;
+            }
+
+            foreach (JsonElement group in groups.EnumerateArray())
+            {
+                JsonElement items;
+                if (!group.TryGetProperty("items", out items) || items.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                foreach (JsonElement item in items.EnumerateArray())
+                {
+                    itemTexts.Add(item.GetRawText());
+                }
+            }
+
+            return itemTexts;
         }
 
+        private bool TryReadSubscription(JsonElement instrument, out string symbol, out int token)
+        {
+            symbol = string.Empty;
+            token = 0;
+            JsonElement symbolProperty;
+            JsonElement tokenProperty;
+            if (!instrument.TryGetProperty("tradingsymbol", out symbolProperty) || symbolProperty.ValueKind != JsonValueKind.String)
+            {
+                return false;
+            }
+
+            if (!instrument.TryGetProperty("instrument_token", out tokenProperty) || tokenProperty.ValueKind != JsonValueKind.Number)
+            {
+                return false;
+            }
+
+            long value = tokenProperty.GetInt64();
+            if (value <= 0 || value > int.MaxValue)
+            {
+                return false;
+            }
+
+            symbol = symbolProperty.GetString() ?? string.Empty;
+            token = (int)value;
+            return symbol.Length != 0;
+        }
+
+        private static int ReadWatchListNumber(string uri)
+        {
+            Match match = Regex.Match(uri, @"\d+");
+            if (!match.Success)
+            {
+                return 0;
+            }
+
+            int number;
+            if (!int.TryParse(match.Value, NumberStyles.None, CultureInfo.InvariantCulture, out number))
+            {
+                return 0;
+            }
+
+            return number;
+        }
+
+        private void SetSubscription(string symbol, int instrumentToken)
+        {
+            lock (this.subscriptionLock)
+            {
+                this.subscriptions[symbol] = instrumentToken;
+            }
+        }
+
+        private void RaiseUpdated()
+        {
+            EventHandler? handler = this.MarketWatchDataUpdated;
+            if (handler != null)
+            {
+                handler(this, EventArgs.Empty);
+            }
+        }
     }
 }

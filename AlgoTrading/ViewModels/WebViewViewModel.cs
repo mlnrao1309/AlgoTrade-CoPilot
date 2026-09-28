@@ -1,6 +1,7 @@
-using AlgoTrading.Helpers;
+﻿using AlgoTrading.Helpers;
 using AlgoTrading.Models;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Identity.Client;
 using Microsoft.Web.WebView2.Core;
 using System;
@@ -12,6 +13,8 @@ using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 
@@ -19,9 +22,8 @@ namespace AlgoTrading.ViewModels
 {
     public class WebViewViewModel : INotifyPropertyChanged
     {
-        private readonly AlgoTrading.DataAccess.Repositories.ICandleRepository _candleRepository;
         private readonly Models.AppSettings _appSettings;
-        
+        private readonly MarketWatchModel _marketWatchModel;
         private bool _isProcessWebResourceResponseReceivedEnabled = false;
         public bool IsProcessWebResourceResponseReceivedEnabled
         {
@@ -41,7 +43,6 @@ namespace AlgoTrading.ViewModels
         private string? _lastResourceUri;
         private string? _lastResponseStatus;
 
-        private readonly System.Net.Http.HttpClient _client = new System.Net.Http.HttpClient();
         public string? LastResourceUri
         {
             get => _lastResourceUri;
@@ -67,46 +68,33 @@ namespace AlgoTrading.ViewModels
             get => _accessToken;
         }
 
-        readonly MarketWatchModel? marketWatchModel = null;
+
+
         private HistoricalDataModel? historicalDataModel = null;
-        public WebViewViewModel(AlgoTrading.DataAccess.Repositories.ICandleRepository candleRepository, Models.AppSettings appSettings)
+
+        public WebViewViewModel(Models.AppSettings appSettings, IServiceScopeFactory scopeFactory)
         {
-            _candleRepository = candleRepository ?? throw new ArgumentNullException(nameof(candleRepository));
-            _appSettings = appSettings ?? throw new ArgumentNullException(nameof(appSettings));
-            marketWatchModel = new MarketWatchModel();
+            if (appSettings == null)
+            {
+                throw new ArgumentNullException(nameof(appSettings));
+            }
 
-            marketWatchModel.MarketWatchDataUpdated += (s, e) =>
-            { 
-                // Handle the event when market watch data is updated
-                // For example, you can update the UI or perform other actions
-                // You can access the updated data through marketWatchModel.ActiveSubscriptions
-                marketWatchModel.ActiveSubscriptions.ToList().ForEach(kvp =>
-                {
-                    Debug.WriteLine($"Trading Symbol: {kvp.Key}, Instrument Token: {kvp.Value}");
-                });
-            };
-            //Reads offline market watch data from the local file and populates the ActiveSubscriptions dictionary
-            //var marketData = marketWatchModel.GetOfflineMarketWatchDataAsync();
+            if (scopeFactory == null)
+            {
+                throw new ArgumentNullException(nameof(scopeFactory));
+            }
 
-
-            //var data =  _candleRepository.GetCandlesAsync(256265,"minute",limit:100000).ContinueWith( e => {
-            //    if (e.IsCompletedSuccessfully)
-            //    {
-            //        var candles = e.Result;
-            //        // Process the retrieved candles as needed
-            //        foreach (var candle in candles)
-            //        {
-            //            // Example: Log or display candle information
-            //            Console.WriteLine($"Timestamp: {candle.Timestamp}, Open: {candle.Open}, Close: {candle.Close}");
-            //        }
-            //    }
-            //    else if (e.IsFaulted)
-            //    {
-            //        // Handle any exceptions that occurred during the async operation
-            //        Console.WriteLine($"Error retrieving candles: {e.Exception?.GetBaseException().Message}");
-            //    }
-            //}); 
+            _appSettings = appSettings;
+            _marketWatchModel = new MarketWatchModel(scopeFactory, appSettings.MsSqlDatabase);
+            _marketWatchModel.MarketWatchDataUpdated += OnMarketWatchDataUpdated;
+            SelectedStatusMessages.CollectionChanged += (s, e) => System.Windows.Input.CommandManager.InvalidateRequerySuggested();
         }
+
+        private void OnMarketWatchDataUpdated(object? sender, EventArgs e)
+        {
+            Debug.WriteLine("Market watch subscriptions: " + _marketWatchModel.ActiveSubscriptionCount);
+        }
+
         public ObservableCollection<StatusMessage> StatusMessages { get; } = new ObservableCollection<StatusMessage>();
 
         // Selected items (multi-selection) bound from the ListBox via behavior
@@ -182,43 +170,51 @@ namespace AlgoTrading.ViewModels
             }
         });
         private ICommand? _fetchHistoricalDataCommand;
-        public ICommand FetchHistoricalDataCommand => _fetchHistoricalDataCommand ??= new RelayCommand(p =>
-        {
-            marketWatchModel?.ActiveSubscriptions.Clear();
-            marketWatchModel?.GetOfflineMarketWatchDataAsync().ContinueWith(e =>
-            {
-                if (e.IsCompletedSuccessfully)
-                {
-                    var msg = new StatusMessage("Market Watch Data", "Successfully read offline market watch data.", StatusMessageType.Info);
-                    Application.Current?.Dispatcher?.Invoke(() => StatusMessages.Add(msg));
-                }
-                else if (e.IsFaulted)
-                {
-                    var msg = new StatusMessage("Market Watch Data Exception", e.Exception?.GetBaseException().Message ?? "Unknown error", StatusMessageType.Error);
-                    Application.Current?.Dispatcher?.Invoke(() => StatusMessages.Add(msg));
-                }
-            });
+        public ICommand FetchHistoricalDataCommand => _fetchHistoricalDataCommand ??= new RelayCommand(p => _ = FetchHistoricalDataAsync());
 
-            if (_accessToken is not null)
+        /// <summary>
+        /// Loads the saved market-watch files, persists the instrument master, then runs the peace-time backfill.
+        /// Every failure surfaces as a status message; nothing is fired and forgotten.
+        /// </summary>
+        private async Task FetchHistoricalDataAsync()
+        {
+            try
             {
-                _client.DefaultRequestHeaders.Add("Authorization", $"enctoken {AccessToken}");
-                historicalDataModel = new HistoricalDataModel(_client, _accessToken);
-                historicalDataModel.ConnectionString = ConnectionString;
-                historicalDataModel.GetHistoricalDataFromApiAsync(marketWatchModel.ActiveSubscriptions.Values.ToArray(), HistoryCandleInterval.AllIntervals, years: 5).ContinueWith(e =>
+                _marketWatchModel.ClearSubscriptions();
+                StatusMessage marketWatch = await _marketWatchModel.LoadOfflineMarketWatchAsync();
+                ReportStatus(marketWatch);
+                int[] instrumentTokens = _marketWatchModel.ActiveSubscriptions.Values.ToArray();
+                if (instrumentTokens.Length == 0)
                 {
-                    if (e.IsCompletedSuccessfully)
-                    {
-                        var msg = new StatusMessage("Historical Data Fetch", "Successfully fetched historical data.", StatusMessageType.Info);
-                        Application.Current?.Dispatcher?.Invoke(() => StatusMessages.Add(msg));
-                    }
-                    else if (e.IsFaulted)
-                    {
-                        var msg = new StatusMessage("Historical Data Fetch Exception", e.Exception?.GetBaseException().Message ?? "Unknown error", StatusMessageType.Error);
-                        Application.Current?.Dispatcher?.Invoke(() => StatusMessages.Add(msg));
-                    }
-                });
+                    ReportStatus(new StatusMessage("Historical Data Fetch", "No instrument subscriptions are available; nothing was fetched.", StatusMessageType.Warning));
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(_accessToken))
+                {
+                    ReportStatus(new StatusMessage("Historical Data Fetch", "An access token is required before historical data can be fetched.", StatusMessageType.Warning));
+                    return;
+                }
+
+                historicalDataModel = new HistoricalDataModel(new HttpClient(), _accessToken);
+                historicalDataModel.ConnectionString = ConnectionString;
+                historicalDataModel.Progress = message => ReportStatus(new StatusMessage("Historical Data Fetch", message, StatusMessageType.Info));
+                HistoricalBackfillReport report = await historicalDataModel.GetHistoricalDataFromApiAsync(instrumentTokens,
+                    HistoryCandleInterval.AllIntervals, years: 1);
+                string details = "Requested " + report.RequestedChunks + " chunk(s); stored " + report.StoredChunks
+                    + "; budget exhausted: " + report.BudgetExhausted + ".";
+                ReportStatus(new StatusMessage("Historical Data Fetch", details, StatusMessageType.Info));
             }
-        });
+            catch (Exception exception)
+            {
+                ReportStatus(new StatusMessage("Historical Data Fetch Exception", exception.Message, StatusMessageType.Error));
+            }
+        }
+
+        private void ReportStatus(StatusMessage message)
+        {
+            Application.Current?.Dispatcher?.Invoke(() => StatusMessages.Add(message));
+        }
         //},(_) => _accessToken is not null);
 
         private ICommand? _readCurrentMarketWatchCommand;
@@ -455,22 +451,21 @@ namespace AlgoTrading.ViewModels
             }
         }
 
-        // Called from the view when WebView2 raises WebResourceResponseReceived
-        public void OnWebResourceResponseReceived(object? sender, CoreWebView2WebResourceResponseReceivedEventArgs args)
+        // Called from the view when WebView2 raises WebResourceResponseReceived; async void is the event boundary.
+        public async void OnWebResourceResponseReceived(object? sender, CoreWebView2WebResourceResponseReceivedEventArgs args)
         {
             StatusMessage msg = new StatusMessage("WebResourceResponseReceived", $"Request: {args.Request.Uri}, Response: {args.Response.StatusCode} {args.Response.ReasonPhrase}", StatusMessageType.Info);
             try
             {
-                if (IsProcessWebResourceResponseReceivedEnabled)
+                if (IsProcessWebResourceResponseReceivedEnabled && args.Request.Uri.Contains("marketwatch"))
                 {
-                    msg = marketWatchModel?.ProcessWebResourceResponseReceived(args.Request, args.Response);
                     IsProcessWebResourceResponseReceivedEnabled = false; // Reset the flag after processing
+                    msg = await _marketWatchModel.ProcessWebResourceResponseReceivedAsync(args.Request, args.Response);
                 }
             }
             catch (Exception ex)
             {
-                msg = new StatusMessage("WebResourceResponseReceived Exception", $"Request: {args.Request.Uri}, Response: {args.Response.StatusCode} {args.Response.ReasonPhrase}, Exception: {ex.Message}", StatusMessageType.Error);
-                // swallow any errors to avoid crashing the UI thread
+                msg = new StatusMessage("WebResourceResponseReceived Exception", $"Request: {args.Request.Uri}, Exception: {ex.Message}", StatusMessageType.Error);
             }
             Application.Current?.Dispatcher?.Invoke(() => StatusMessages.Add(msg));
         }
@@ -481,14 +476,6 @@ namespace AlgoTrading.ViewModels
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
-        public WebViewViewModel(Models.AppSettings appSettings)
-        {
-            _appSettings = appSettings ?? throw new ArgumentNullException(nameof(appSettings));
-            // Re-evaluate commands when selection changes
-            SelectedStatusMessages.CollectionChanged += (s, e) => System.Windows.Input.CommandManager.InvalidateRequerySuggested();
-        }
-
-
     }
 
     // Minimal RelayCommand implementation to avoid third-party dependencies

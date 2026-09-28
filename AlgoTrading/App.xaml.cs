@@ -1,12 +1,11 @@
-﻿using System;
-using System.IO;
-using System.Windows;
+﻿using AlgoTrading.DataAccess.Calendar;
+using AlgoTrading.DataAccess.Infrastructure.DatabaseContext;
+using AlgoTrading.Models;
+using AlgoTrading.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using AlgoTrading.Models;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration.Json;
-using AlgoTrading.DataAccess.Calendar;
+using System.Windows;
 
 
 namespace AlgoTrading
@@ -53,26 +52,19 @@ namespace AlgoTrading
             services.AddSingleton<ViewModels.WebViewViewModel>();
             services.AddTransient<MainWindow>();
 
-            string connectionString = configuration.GetConnectionString("MsSqlDatabase");
+            string? connectionString = configuration.GetConnectionString("MsSqlDatabase");
             //// Data access registrations
-            try
-            {
-                services.AddDbContext<AlgoTrading.DataAccess.Data.AlgoTradingDbContext>(opts =>
-                {
-                    var cs = configuration.GetSection("ConnectionStrings")["MsSqlDatabase"];
-                    if (!string.IsNullOrEmpty(cs))
-                    {
-                        opts.UseSqlServer(cs);
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
 
-            }
-            services.AddScoped<AlgoTrading.DataAccess.Repositories.ICandleRepository, AlgoTrading.DataAccess.Repositories.CandleRepository>();
             if (!string.IsNullOrWhiteSpace(connectionString))
             {
+
+                services.AddDbContext<ApplicationDbContext>(options =>
+                    options.UseSqlServer(connectionString));
+
+                services.AddScoped<DataAccess.Infrastructure.Repositories.IInstrumentEqRepository, DataAccess.Infrastructure.Repositories.InstrumentEqRepository>();
+                services.AddScoped<DataAccess.Infrastructure.Repositories.IInstrumentFoRepository, DataAccess.Infrastructure.Repositories.InstrumentFoRepository>();
+                services.AddScoped<DataAccess.Infrastructure.Repositories.IUnitOfWork, DataAccess.Infrastructure.Repositories.UnitOfWork>();
+
                 services.AddSingleton<ITradingCalendarRepository>(
                     new SqlTradingCalendarRepository(connectionString, commandTimeoutSeconds: 30));
                 services.AddSingleton<ITradingCalendarProvider, RepositoryTradingCalendarProvider>();
@@ -83,7 +75,7 @@ namespace AlgoTrading
                     calendar["SegmentCode"] ?? "CM",
                     calendar["Revision"] ?? throw new InvalidOperationException("TradingCalendar:Revision is required.")));
             }
-
+            services.AddScoped<IInstrumentImportService, InstrumentImportService>();
             _serviceProvider = services.BuildServiceProvider();
 
             // Create and show MainWindow from DI

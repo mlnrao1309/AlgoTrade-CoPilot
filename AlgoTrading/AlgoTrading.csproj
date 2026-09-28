@@ -8,10 +8,6 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);AlgoTrading.Models\**;AlgoTrading.DataAccess\**;AlgoTrading.RuleTests\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
-    <None Include="AlgoTrading.DataAccess\AlgoTrading.DataAccess.csproj" />
-    <None Include="AlgoTrading.Models\AlgoTrading.Models.csproj" />
-  </ItemGroup>
-  <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4255-prerelease" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
@@ -22,6 +18,7 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.12" />
   </ItemGroup>
   <ItemGroup>
+    <None Remove="AlgoTrading.csproj1" />
   </ItemGroup>
   <ItemGroup>
     <None Update="appsettings.json">
