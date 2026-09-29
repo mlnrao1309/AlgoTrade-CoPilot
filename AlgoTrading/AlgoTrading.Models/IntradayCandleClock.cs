@@ -36,6 +36,37 @@ namespace AlgoTrading.Models
             return MarketTimestamp.FromDateTime(candleStart.Add(duration).UtcDateTime);
         }
 
+        /// <summary>
+        /// Aggregation may seal one shortened bar when an explicit special session is shorter than the configured
+        /// target. The ordinary candle-completion contract remains strict.
+        /// </summary>
+        public DateTimeOffset GetAggregationCompletion(DateTimeOffset candleStart, TimeSpan duration,
+            TradingSession session)
+        {
+            if (session == null)
+            {
+                throw new ArgumentNullException(nameof(session));
+            }
+
+            if (duration <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(duration), "An intraday duration must be positive.");
+            }
+
+            if (duration > session.ClosedAt - session.OpenedAt)
+            {
+                if (candleStart != session.OpenedAt)
+                {
+                    throw new ArgumentException("A target longer than its session must begin at session open.",
+                        nameof(candleStart));
+                }
+
+                return session.ClosedAt;
+            }
+
+            return this.GetCompletion(candleStart, duration, session);
+        }
+
         /// <summary>Provider finalization is an explicit prerequisite; wall-clock passage alone is insufficient.</summary>
         public bool TryCreateCompleted(Candle candle, TimeSpan duration, TradingSession session,
             DateTimeOffset observedAt, bool providerFinalized, out CompletedCandle? completedCandle)

@@ -47,6 +47,14 @@ internal static class Program
         integratedTests.Run();
         DailyPivotTests dailyPivotTests = new DailyPivotTests();
         dailyPivotTests.Run();
+        HistoricalIngestionTests historicalIngestionTests = new HistoricalIngestionTests();
+        await historicalIngestionTests.RunAsync();
+        PlatformConfigurationTests platformConfigurationTests = new PlatformConfigurationTests();
+        await platformConfigurationTests.RunAsync();
+        ClosedCandleProcessingCoordinatorTests closedCandleTests = new ClosedCandleProcessingCoordinatorTests();
+        closedCandleTests.Run();
+        BoundedMarketDataPipelineTests pipelineTests = new BoundedMarketDataPipelineTests();
+        await pipelineTests.RunAsync();
     }
 }
 

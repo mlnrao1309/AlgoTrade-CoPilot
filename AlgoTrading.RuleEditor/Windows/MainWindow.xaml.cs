@@ -26,6 +26,7 @@ namespace AlgoTrading.RuleEditor.Windows
         private bool _readOnly;
         private string? _filePath;
         private DateTime _fileWriteTimeUtc;
+        private BacktestResult? _lastBacktest;
 
         public IReadOnlyList<string> QuantityBases { get; } = new[] { "Original", "Remaining" };
 
@@ -343,6 +344,40 @@ namespace AlgoTrading.RuleEditor.Windows
         private void OnSave(object sender, RoutedEventArgs arguments) => SaveDocument(false);
         private void OnSaveAs(object sender, RoutedEventArgs arguments) => SaveDocument(true);
         private void OnValidate(object sender, RoutedEventArgs arguments) { CommitFields(); RefreshChecks(); StatusText.Text = ValidationTitle.Text + "."; }
+
+        private void OnChooseBacktestCsv(object sender, RoutedEventArgs arguments)
+        {
+            OpenFileDialog dialog = new OpenFileDialog { Filter = "Candle CSV (*.csv)|*.csv|All files (*.*)|*.*", Title = "Choose completed-candle data" };
+            if (dialog.ShowDialog(this) == true) BacktestPathBox.Text = dialog.FileName;
+        }
+
+        private void OnRunBacktest(object sender, RoutedEventArgs arguments)
+        {
+            CommitFields();
+            if (string.IsNullOrWhiteSpace(BacktestPathBox.Text))
+            {
+                MessageBox.Show(this, "Choose a candle CSV first.", "Backtest", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            if (!decimal.TryParse(BacktestQuantityBox.Text, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal quantity) || quantity <= 0)
+            {
+                MessageBox.Show(this, "Quantity must be a positive number.", "Backtest", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            try
+            {
+                StrategyRuntimeSnapshot snapshot = new StrategyRuntimeAdapter().Load(_documents.Serialize(_document));
+                _lastBacktest = new SimpleBacktestService().RunCsv(snapshot, BacktestPathBox.Text, quantity);
+                BacktestResultBox.Text = _lastBacktest.ToReport();
+                StatusText.Text = "Backtest complete: " + _lastBacktest.Trades.Count + " trade(s), net P&L " + _lastBacktest.NetProfit.ToString("0.00####", CultureInfo.InvariantCulture) + ".";
+            }
+            catch (Exception exception)
+            {
+                _lastBacktest = null;
+                BacktestResultBox.Text = string.Empty;
+                MessageBox.Show(this, exception.Message, "Backtest failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
 
         private void OnUndo(object sender, RoutedEventArgs arguments)
         {

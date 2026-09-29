@@ -7,7 +7,7 @@
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         xmlns:vm="clr-namespace:AlgoTrading.ViewModels"
         xmlns:behaviors="clr-namespace:AlgoTrading.Behaviors"
-        mc:Ignorable="d" Title="Main Window" Height="450" Width="800" WindowState="Maximized">
+        mc:Ignorable="d" Title="AlgoTrading · Market Data" Height="450" Width="800" WindowState="Maximized">
 
     <!-- DataContext is provided by DI (App.xaml.cs) -->
     <Window.Resources>

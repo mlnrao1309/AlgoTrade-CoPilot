@@ -34,7 +34,41 @@ namespace AlgoTrading.RuleEditor.Verification
             VerifyHistory(example);
             VerifyExecution(adapter);
             VerifyStrategyDocuments();
+            VerifyBacktest();
             File.WriteAllText(reportPath, "Passed " + _assertions + " editor verification assertions.");
+        }
+
+        private void VerifyBacktest()
+        {
+            StrategyDocumentService documents = new StrategyDocumentService();
+            StrategyDocument strategy = documents.CreateBlank();
+            strategy.Name = "Backtest verification";
+            strategy.Instrument = "TEST";
+            strategy.Execution.ReEntry = "Disabled";
+            strategy.Execution.SameCandleActions = "All eligible exits";
+            strategy.Protection.Value = 10m;
+            strategy.FullExit.Children[0].Right.Number = 1000;
+            strategy.PartialExits.Add(new PartialExitStage { Label = "1R", QuantityPercent = 50m, QuantityBasis = "Original", Target = "1R" });
+            strategy.PartialExits.Add(new PartialExitStage { Label = "2R", QuantityPercent = 100m, QuantityBasis = "Remaining", Target = "2R" });
+            string csvPath = Path.GetTempFileName();
+            try
+            {
+                File.WriteAllText(csvPath,
+                    "Timeframe,InstrumentToken,OpenedAt,ClosedAt,Open,High,Low,Close,Volume\n" +
+                    "15minute,1,2026-01-01T09:15:00+05:30,2026-01-01T09:30:00+05:30,10,10,10,10,100\n" +
+                    "15minute,1,2026-01-01T09:30:00+05:30,2026-01-01T09:45:00+05:30,10,11.5,9.5,11,100\n" +
+                    "15minute,1,2026-01-01T09:45:00+05:30,2026-01-01T10:00:00+05:30,11,12.5,10.5,12,100");
+                StrategyRuntimeSnapshot snapshot = new StrategyRuntimeAdapter().Load(documents.Serialize(strategy));
+                BacktestResult result = new SimpleBacktestService().RunCsv(snapshot, csvPath, 100m);
+                Assert(result.Trades.Count == 1, "Partial exits are consolidated into one completed trade.");
+                Assert(result.NetProfit == 150m, "Backtest applies original and remaining quantity bases deterministically.");
+                Assert(result.Trades[0].AverageExitPrice == 11.5m, "Backtest reports the quantity-weighted exit price.");
+                Assert(result.CandlesProcessed == 3, "Backtest processes each completed evaluation candle once.");
+            }
+            finally
+            {
+                File.Delete(csvPath);
+            }
         }
 
         private void VerifyStrategyDocuments()

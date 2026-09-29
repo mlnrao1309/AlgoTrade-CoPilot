@@ -1,4 +1,5 @@
 ﻿using AlgoTrading.DataAccess.Calendar;
+using AlgoTrading.DataAccess.Infrastructure;
 using AlgoTrading.DataAccess.Infrastructure.DatabaseContext;
 using AlgoTrading.Models;
 using AlgoTrading.Services;
@@ -20,7 +21,7 @@ namespace AlgoTrading
 
         public static IServiceProvider ServiceProvider => _serviceProvider ?? throw new InvalidOperationException("Service provider is not initialized.");
 
-        protected override void OnStartup(StartupEventArgs e)
+        protected override async void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
 
@@ -41,7 +42,7 @@ namespace AlgoTrading
                 var cs = configuration.GetSection("ConnectionStrings");
                 if (cs.Exists())
                 {
-                    var val = cs["MsSqlDatabase"];
+                    var val = Environment.GetEnvironmentVariable("ALGOTRADING_SQL_CONNECTION_STRING") ?? cs["MsSqlDatabase"];
                     if (!string.IsNullOrEmpty(val)) appSettings.MsSqlDatabase = val;
                 }
             }
@@ -52,7 +53,8 @@ namespace AlgoTrading
             services.AddSingleton<ViewModels.WebViewViewModel>();
             services.AddTransient<MainWindow>();
 
-            string? connectionString = configuration.GetConnectionString("MsSqlDatabase");
+            string? connectionString = Environment.GetEnvironmentVariable("ALGOTRADING_SQL_CONNECTION_STRING")
+                ?? configuration.GetConnectionString("MsSqlDatabase");
             //// Data access registrations
 
             if (!string.IsNullOrWhiteSpace(connectionString))
@@ -64,6 +66,8 @@ namespace AlgoTrading
                 services.AddScoped<DataAccess.Infrastructure.Repositories.IInstrumentEqRepository, DataAccess.Infrastructure.Repositories.InstrumentEqRepository>();
                 services.AddScoped<DataAccess.Infrastructure.Repositories.IInstrumentFoRepository, DataAccess.Infrastructure.Repositories.InstrumentFoRepository>();
                 services.AddScoped<DataAccess.Infrastructure.Repositories.IUnitOfWork, DataAccess.Infrastructure.Repositories.UnitOfWork>();
+                services.AddScoped<IPlatformConfigurationProvider, PlatformConfigurationProvider>();
+                services.AddSingleton<IPlatformConfigurationRuntime, PlatformConfigurationRuntime>();
 
                 services.AddSingleton<ITradingCalendarRepository>(
                     new SqlTradingCalendarRepository(connectionString, commandTimeoutSeconds: 30));
@@ -77,6 +81,29 @@ namespace AlgoTrading
             }
             services.AddScoped<IInstrumentImportService, InstrumentImportService>();
             _serviceProvider = services.BuildServiceProvider();
+
+            if (!string.IsNullOrWhiteSpace(connectionString))
+            {
+                try
+                {
+                    using (IServiceScope scope = _serviceProvider.CreateScope())
+                    {
+                        IPlatformConfigurationProvider provider = scope.ServiceProvider
+                            .GetRequiredService<IPlatformConfigurationProvider>();
+                        IPlatformConfigurationRuntime runtime = _serviceProvider
+                            .GetRequiredService<IPlatformConfigurationRuntime>();
+                        await runtime.InitializeAsync(provider);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    MessageBox.Show("Background market-data configuration is invalid or unavailable. "
+                        + "Processing was not started.\n\n" + exception.Message,
+                        "Market-data startup failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                    Shutdown(1);
+                    return;
+                }
+            }
 
             // Create and show MainWindow from DI
             var main = _serviceProvider.GetRequiredService<MainWindow>();

@@ -16,7 +16,7 @@ Without an output-directory argument, each run creates a timestamped folder unde
 
 ## Settings
 
-The test reads database-test.settings.json, copied alongside the executable. It contains the requested Server=MANCHIKANTI\MANCHIKANTI connection string with Database=Algo_Trading_CFCore, Trusted_Connection=True, Encrypt=false and TrustServerCertificate=True.
+Set `ALGOTRADING_SQL_CONNECTION_STRING` before running the test. `database-test.settings.json` is copied alongside the executable but deliberately contains no machine name or credential. A local untracked connection string in that file remains supported for development.
 
 The defaults select instrument 265 and timeframe 15minute. TimestampTimeZoneId is India Standard Time; TimestampRepresentsCandleOpen is true. This matches the importer using DateTime.Parse on the source candle timestamp on this machine. The test converts that timestamp to an instant and adds fifteen minutes to obtain completion time. LastUpdated is logged as source metadata, not used as candle completion time. Change these explicit settings if the source timestamp convention changes. Only rows completed by the captured observation time are evaluated.
 

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AlgoTrading.DataAccess.Infrastructure.DatabaseContext;
 using AlgoTrading.Models;
+using AlgoTrading.Models.Configuration;
 using AlgoTrading.Models.MarketData.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,11 +16,14 @@ namespace AlgoTrading.DataAccess.Infrastructure
         Task<TimeframeCatalog> GetTimeframeCatalogAsync(CancellationToken cancellationToken = default);
 
         Task<IReadOnlyList<ConfigCriticalLevel>> GetCriticalLevelRulesAsync(CancellationToken cancellationToken = default);
+
+        Task<PlatformConfigurationSnapshot> LoadActiveConfigurationAsync(
+            CancellationToken cancellationToken = default);
     }
 
     /// <summary>
-    /// Loads Config_Timeframes and Config_CriticalLevels. When the tables are empty or unreachable the caller gets
-    /// the blueprint defaults instead of a silent empty pipeline.
+    /// Loads Config_Timeframes and Config_CriticalLevels. The legacy catalog-only API retains its documented
+    /// design-time fallback; runtime activation never falls back when tables are empty or unreachable.
     /// </summary>
     public sealed class PlatformConfigurationProvider : IPlatformConfigurationProvider
     {
@@ -27,7 +31,12 @@ namespace AlgoTrading.DataAccess.Infrastructure
 
         public PlatformConfigurationProvider(ApplicationDbContext context)
         {
-            this.context = context ?? throw new ArgumentNullException(nameof(context));
+            if (context == null)
+            {
+                throw new ArgumentNullException(nameof(context));
+            }
+
+            this.context = context;
         }
 
         public async Task<TimeframeCatalog> GetTimeframeCatalogAsync(CancellationToken cancellationToken = default)
@@ -38,18 +47,9 @@ namespace AlgoTrading.DataAccess.Infrastructure
                 return TimeframeCatalog.CreateDefault();
             }
 
-            List<TimeframeOption> options = new List<TimeframeOption>();
-            for (int index = 0; index < rows.Count; index++)
-            {
-                ConfigTimeframe row = rows[index];
-                TimeframeSourceStream stream = row.SourceStream == "DAILY_1D"
-                    ? TimeframeSourceStream.DailyOneDay
-                    : TimeframeSourceStream.IntradayFiveMinute;
-                string canonicalName = TimeframeNaming.DeriveCanonicalName(row.TimeframeCode);
-                options.Add(new TimeframeOption(row.TimeframeCode, canonicalName, row.MinutesMultiplier, stream, row.IsActive));
-            }
-
-            return new TimeframeCatalog(options);
+            PlatformConfigurationValidator validator = new PlatformConfigurationValidator();
+            List<ConfigCriticalLevel> noCriticalLevelRows = new List<ConfigCriticalLevel>();
+            return validator.Activate(rows, noCriticalLevelRows).Timeframes;
         }
 
         public async Task<IReadOnlyList<ConfigCriticalLevel>> GetCriticalLevelRulesAsync(CancellationToken cancellationToken = default)
@@ -58,6 +58,34 @@ namespace AlgoTrading.DataAccess.Infrastructure
                 .Where(row => row.IsActive)
                 .ToListAsync(cancellationToken);
             return rows.AsReadOnly();
+        }
+
+        public async Task<PlatformConfigurationSnapshot> LoadActiveConfigurationAsync(
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                List<ConfigTimeframe> timeframeRows = await this.context.ConfigTimeframes.AsNoTracking()
+                    .ToListAsync(cancellationToken);
+                List<ConfigCriticalLevel> criticalLevelRows = await this.context.ConfigCriticalLevels.AsNoTracking()
+                    .ToListAsync(cancellationToken);
+                PlatformConfigurationValidator validator = new PlatformConfigurationValidator();
+                return validator.Activate(timeframeRows, criticalLevelRows);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (PlatformConfigurationException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                throw new PlatformConfigurationException(
+                    "Runtime configuration could not be loaded from Config_Timeframes and Config_CriticalLevels.",
+                    exception);
+            }
         }
     }
 }

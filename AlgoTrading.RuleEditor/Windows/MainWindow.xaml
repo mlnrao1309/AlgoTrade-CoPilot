@@ -71,6 +71,20 @@
                     </StackPanel></ScrollViewer>
                 </TabItem>
                 <TabItem Header="Full exit"><Grid Margin="18"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="When this condition matches, close all remaining quantity." Foreground="{StaticResource MutedBrush}" Margin="0,0,0,12"/><ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"><ContentControl x:Name="FullExitHost" Margin="0,0,10,0"/></ScrollViewer></Grid></TabItem>
+                <TabItem Header="Backtest">
+                    <Grid Margin="18">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <TextBlock Text="Run this strategy against completed-candle CSV data. Signals fill at the next candle open; stops and targets use candle OHLC. No fees or slippage are applied." Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,0,0,14"/>
+                        <Grid Grid.Row="1" Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="100"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBox x:Name="BacktestPathBox" IsReadOnly="True" AutomationProperties.Name="Backtest CSV path"/>
+                            <TextBox x:Name="BacktestQuantityBox" Grid.Column="1" Text="1" Margin="10,0" AutomationProperties.Name="Backtest quantity"/>
+                            <Button Grid.Column="2" Content="Choose CSV" Click="OnChooseBacktestCsv" Margin="0,0,8,0"/>
+                            <Button Grid.Column="3" Content="Run backtest" Click="OnRunBacktest" Style="{StaticResource PrimaryButton}"/>
+                        </Grid>
+                        <TextBox x:Name="BacktestResultBox" Grid.Row="2" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas" FontSize="12" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="Backtest result"/>
+                    </Grid>
+                </TabItem>
                 <TabItem Header="Execution &amp; summary"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="18"><TextBlock Text="Execution policy" FontSize="19" FontWeight="SemiBold"/><Grid Margin="0,10,0,20"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,8,0"><TextBlock Text="Stop/target collision"/><ComboBox x:Name="PriorityBox" SelectionChanged="OnSimpleSelectionChanged"><ComboBoxItem Content="Stop first"/><ComboBoxItem Content="Target first"/></ComboBox></StackPanel>
                     <StackPanel Grid.Column="1" Margin="8,0"><TextBlock Text="Same-candle actions"/><ComboBox x:Name="ActionBox" SelectionChanged="OnSimpleSelectionChanged"><ComboBoxItem Content="One exit action"/><ComboBoxItem Content="All eligible exits"/></ComboBox></StackPanel>

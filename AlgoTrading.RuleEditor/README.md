@@ -14,6 +14,7 @@ The deployment is framework-dependent and requires the .NET 10 Desktop Runtime o
 4. In **Full exit**, author the condition that closes all remaining quantity.
 5. In **Execution & summary**, select collision/re-entry behavior and review the generated explanation.
 6. Select **Validate**, then **Save**. Files use the `.strategy.json` extension.
+7. In **Backtest**, choose a completed-candle CSV, enter quantity, and run. The report is shown in the application.
 
 The editor evaluates rules on completed candles only. It intentionally exposes no forming/future-candle option.
 
@@ -35,7 +36,19 @@ The editor evaluates rules on completed candles only. It intentionally exposes n
 - returns a deep-copied immutable-in-practice snapshot so later editor changes cannot modify a running strategy;
 - retains protection, partial-exit, level/retest, and execution-policy metadata for the position/execution coordinator.
 
-The runtime remains responsible for resolving an instrument, market data, pivot/critical-level providers, position quantities, orders, and fills. The editor does not pretend that unavailable data exists.
+The built-in personal backtester resolves candle rules, position quantity, completed-candle stops, R/percent targets, partial exits, and long/short P&L. Pivot/critical-level strategies still require a level provider and are rejected explicitly by the backtester rather than silently using fabricated prices.
+
+## Backtest CSV
+
+Required columns are `OpenedAt,ClosedAt,Open,High,Low,Close,Volume`. Optional `Timeframe` defaults to the strategy evaluation timeframe, and optional `InstrumentToken` defaults to `1`. Timestamps must include an offset, such as `2026-01-02T09:15:00+05:30`. Mixed-timeframe strategies need rows for every required timeframe.
+
+Backtest behavior is intentionally small and deterministic: entry and full-exit signals fill at the next candle open; protective stops and targets use completed candle OHLC; stop/target priority and one/all eligible target behavior come from the strategy; no fees or slippage are applied; an open position is closed at the last candle close. Partial targets must be positive R multiples (`1R`) or percentages from entry (`2%`).
+
+Headless use:
+
+```powershell
+AlgoTrading.RuleEditor.exe --backtest strategy.strategy.json candles.csv report.txt
+```
 
 ## Validation messages
 
@@ -55,7 +68,6 @@ The verification covers the original rule/value/group/execution checks plus full
 ## Explicit non-goals
 
 - No broker order placement inside the editor.
-- No profitability claim or embedded backtest engine.
 - No automatic market-data creation.
 - No hidden future/forming-candle evaluation.
 - No multi-user approval workflow, database document-version tree, or institutional deployment infrastructure.

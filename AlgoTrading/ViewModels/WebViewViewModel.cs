@@ -1,5 +1,6 @@
 ﻿using AlgoTrading.Helpers;
 using AlgoTrading.Models;
+using AlgoTrading.Models.MarketData.Ingestion;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Identity.Client;

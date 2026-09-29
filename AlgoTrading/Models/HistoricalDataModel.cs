@@ -1,6 +1,7 @@
 namespace AlgoTrading.Models
 {
-    using AlgoTrading.Helpers;
+    using AlgoTrading.DataAccess.Historical;
+    using AlgoTrading.Models.MarketData.Ingestion;
     using System;
     using System.Collections.Generic;
     using System.Globalization;
@@ -20,8 +21,6 @@ namespace AlgoTrading.Models
         public static readonly string[] AllIntervals = new string[]
         {
             FiveMinutes,
-            FifteenMinutes,
-            Hour,
             Daily
         };
     }
@@ -33,74 +32,11 @@ namespace AlgoTrading.Models
         public Dictionary<string, List<Candle>> Intervals { get; } = new Dictionary<string, List<Candle>>();
     }
 
-    /// <summary>Outcome of one historical backfill pass across every requested instrument and interval.</summary>
-    internal sealed class HistoricalBackfillReport
-    {
-        private readonly List<string> failures;
-
-        internal HistoricalBackfillReport(int requestedChunks, int completedChunks, int storedChunks, bool budgetExhausted,
-            List<string> failures)
-        {
-            this.RequestedChunks = requestedChunks;
-            this.CompletedChunks = completedChunks;
-            this.StoredChunks = storedChunks;
-            this.BudgetExhausted = budgetExhausted;
-            this.failures = failures;
-        }
-
-        internal int RequestedChunks { get; }
-
-        internal int CompletedChunks { get; }
-
-        internal int StoredChunks { get; }
-
-        internal bool BudgetExhausted { get; }
-
-        internal IReadOnlyList<string> Failures
-        {
-            get
-            {
-                return this.failures.AsReadOnly();
-            }
-        }
-
-        internal bool IsComplete
-        {
-            get
-            {
-                return this.failures.Count == 0 && !this.BudgetExhausted;
-            }
-        }
-
-        /// <summary>Failures are never discarded silently; they are handed to the caller as an exception.</summary>
-        internal void ThrowIfIncomplete()
-        {
-            if (this.failures.Count == 0)
-            {
-                return;
-            }
-
-            const int maximumReported = 10;
-            int reported = this.failures.Count < maximumReported ? this.failures.Count : maximumReported;
-            List<string> lines = new List<string>();
-            for (int index = 0; index < reported; index++)
-            {
-                lines.Add(this.failures[index]);
-            }
-
-            string suffix = this.failures.Count > reported
-                ? " (+" + (this.failures.Count - reported).ToString(CultureInfo.InvariantCulture) + " more)"
-                : string.Empty;
-            throw new InvalidOperationException("Historical backfill failed for " + this.failures.Count.ToString(CultureInfo.InvariantCulture)
-                + " chunk(s): " + string.Join(" | ", lines) + suffix);
-        }
-    }
-
     /// <summary>
     /// Historical (peace-time) ingestion of Zerodha Kite candles. The 2-hour default budget keeps the
     /// backfill deliberately slow so live throughput is never competing with historical requests.
     /// </summary>
-    internal sealed class HistoricalDataModel
+    internal sealed class HistoricalDataModel : IHistoricalChunkSource
     {
         private const int RequestsPerSecond = 3;
         private const int MaximumAttempts = 4;
@@ -152,8 +88,9 @@ namespace AlgoTrading.Models
         public Action<string>? Progress { get; set; }
 
         /// <summary>
-        /// Fetches every requested range once, stores each completed chunk immediately and never hides a failure.
-        /// Partial progress survives a thrown report so a later pass can resume from the stored chunks.
+        /// Compatibility entry point for callers that specify a relative range. New background callers should use
+        /// the explicit-range overload so configured source coverage, rather than an assumed current date, controls
+        /// the requested range.
         /// </summary>
         public async Task<HistoricalBackfillReport> GetHistoricalDataFromApiAsync(int[] instrumentTokens, string[]? intervals,
             int years = 5, CancellationToken cancellationToken = default)
@@ -168,77 +105,28 @@ namespace AlgoTrading.Models
                 throw new ArgumentOutOfRangeException(nameof(years), "Years must be greater than zero.");
             }
 
-            string[] requestedIntervals = intervals ?? HistoryCandleInterval.AllIntervals;
             DateTime marketNow = MarketTimestamp.ToDatabase(MarketTimestamp.FromDateTime(DateTime.UtcNow));
-
             TimeSpan budget = this.BackfillBudget > TimeSpan.Zero ? this.BackfillBudget : DefaultBackfillBudget;
-            using (CancellationTokenSource backfillBudget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            IReadOnlyList<string> streamTypes = ConvertIntervalsToSourceStreams(intervals);
+            HistoricalBackfillRequest request = new HistoricalBackfillRequest(marketNow.AddYears(-years), marketNow,
+                marketNow.AddYears(-years), marketNow, streamTypes, budget, false);
+            return await this.GetHistoricalDataFromApiAsync(instrumentTokens, request, cancellationToken);
+        }
+
+        /// <summary>Runs a resumable backfill over the intersection of requested and configured source coverage.</summary>
+        public async Task<HistoricalBackfillReport> GetHistoricalDataFromApiAsync(int[] instrumentTokens,
+            HistoricalBackfillRequest request, CancellationToken cancellationToken = default)
+        {
+            if (instrumentTokens == null || instrumentTokens.Length == 0)
             {
-                backfillBudget.CancelAfter(budget);
-                List<string> failures = new List<string>();
-                int requestedChunks = 0;
-                int completedChunks = 0;
-                int storedChunks = 0;
-                bool budgetExhausted = false;
-
-                for (int tokenIndex = 0; tokenIndex < instrumentTokens.Length && !budgetExhausted; tokenIndex++)
-                {
-                    int instrumentToken = instrumentTokens[tokenIndex];
-                    for (int intervalIndex = 0; intervalIndex < requestedIntervals.Length && !budgetExhausted; intervalIndex++)
-                    {
-                        string interval = requestedIntervals[intervalIndex];
-                        DateTime rangeStart = marketNow.AddYears(-years);
-                        while (rangeStart < marketNow && !budgetExhausted)
-                        {
-                            if (backfillBudget.IsCancellationRequested)
-                            {
-                                cancellationToken.ThrowIfCancellationRequested();
-                                budgetExhausted = true;
-                                this.ReportProgress("Backfill budget of " + budget + " elapsed; resuming is required.");
-                                break;
-                            }
-
-                            DateTime rangeEnd = rangeStart.AddDays(GetChunkDays(interval));
-                            if (rangeEnd > marketNow)
-                            {
-                                rangeEnd = marketNow;
-                            }
-
-                            requestedChunks++;
-                            try
-                            {
-                                string json = await this.DownloadChunkAsync(instrumentToken, interval, rangeStart, rangeEnd, backfillBudget.Token);
-                                if (!string.IsNullOrWhiteSpace(json))
-                                {
-                                    await SqlCandleBulkUploader.BulkUploadCandleJsonAsync(this.ConnectionString, instrumentToken, interval, json, backfillBudget.Token);
-                                    storedChunks++;
-                                }
-                                completedChunks++;
-                            }
-                            catch (OperationCanceledException)
-                            {
-                                cancellationToken.ThrowIfCancellationRequested();
-                                budgetExhausted = true;
-                                this.ReportProgress("Backfill budget of " + budget + " elapsed; resuming is required.");
-                                break;
-                            }
-                            catch (Exception exception)
-                            {
-                                string description = Describe(instrumentToken, interval, rangeStart, rangeEnd);
-                                failures.Add(description + ": " + exception.Message);
-                                this.ReportProgress("Failed " + description + ": " + exception.Message);
-                            }
-
-                            rangeStart = rangeEnd.AddDays(1);
-                        }
-                    }
-                }
-
-                HistoricalBackfillReport report = new HistoricalBackfillReport(requestedChunks, completedChunks, storedChunks,
-                    budgetExhausted, failures);
-                report.ThrowIfIncomplete();
-                return report;
+                throw new ArgumentException("Instrument token array cannot be null or empty.", nameof(instrumentTokens));
             }
+
+            IHistoricalIngestionRepository repository = new SqlHistoricalIngestionRepository(this.ConnectionString);
+            HistoricalBackfillCoordinator coordinator = new HistoricalBackfillCoordinator(this, repository,
+                new SystemHistoricalBackfillClock());
+            coordinator.Progress = this.Progress;
+            return await coordinator.RunAsync(instrumentTokens, request, cancellationToken);
         }
 
         private static TimeSpan GetRetryDelay(HttpResponseMessage response, int attempt)
@@ -263,12 +151,12 @@ namespace AlgoTrading.Models
             return TimeSpan.FromSeconds(Math.Pow(2.0, attempt));
         }
 
-        private async Task<string> DownloadChunkAsync(int instrumentToken, string interval, DateTime from, DateTime to,
-            CancellationToken cancellationToken)
+        public async Task<string> DownloadChunkAsync(HistoricalChunkRequest chunk, CancellationToken cancellationToken)
         {
-            string url = BaseUrl + instrumentToken.ToString(CultureInfo.InvariantCulture) + "/" + GetApiInterval(interval)
-                + "?from=" + from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-                + "&to=" + to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            string url = BaseUrl + chunk.InstrumentToken.ToString(CultureInfo.InvariantCulture) + "/"
+                + chunk.ProviderInterval + "?from="
+                + chunk.RangeStart.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+                + "&to=" + chunk.RangeEnd.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
             Exception? lastFailure = null;
             for (int attempt = 1; attempt <= MaximumAttempts; attempt++)
@@ -317,52 +205,29 @@ namespace AlgoTrading.Models
             throw new HttpRequestException("Historical request failed after " + MaximumAttempts + " attempts: " + url, lastFailure);
         }
 
-        private static int GetChunkDays(string interval)
+        private static IReadOnlyList<string> ConvertIntervalsToSourceStreams(string[]? intervals)
         {
-            if (interval == HistoryCandleInterval.OneMinute)
+            string[] requestedIntervals = intervals ?? HistoryCandleInterval.AllIntervals;
+            List<string> streamTypes = new List<string>();
+            for (int index = 0; index < requestedIntervals.Length; index++)
             {
-                return 30;
+                string interval = requestedIntervals[index];
+                if (interval == HistoryCandleInterval.FiveMinutes)
+                {
+                    streamTypes.Add(HistoricalStreamTypes.IntradayFiveMinute);
+                }
+                else if (interval == HistoryCandleInterval.Daily)
+                {
+                    streamTypes.Add(HistoricalStreamTypes.DailyOneDay);
+                }
+                else
+                {
+                    throw new ArgumentException("Historical ingestion accepts only authoritative 5-minute and daily "
+                        + "source streams. Derived timeframe requested: " + interval + ".", nameof(intervals));
+                }
             }
 
-            if (interval == HistoryCandleInterval.ThreeMinutes)
-            {
-                return 60;
-            }
-
-            if (interval == HistoryCandleInterval.FiveMinutes)
-            {
-                return 80;
-            }
-
-            if (interval == HistoryCandleInterval.FifteenMinutes)
-            {
-                return 180;
-            }
-
-            if (interval == HistoryCandleInterval.Hour)
-            {
-                return 365;
-            }
-
-            return 800;
-        }
-
-        /// <summary>Kite names the hourly historical interval "60minute"; "hour" is only this application's label.</summary>
-        private static string GetApiInterval(string interval)
-        {
-            if (interval == HistoryCandleInterval.Hour)
-            {
-                return "60minute";
-            }
-
-            return interval;
-        }
-
-        private static string Describe(int instrumentToken, string interval, DateTime from, DateTime to)
-        {
-            return instrumentToken.ToString(CultureInfo.InvariantCulture) + "/" + interval + " "
-                + from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + ".."
-                + to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            return streamTypes.AsReadOnly();
         }
 
         private void ReportProgress(string message)

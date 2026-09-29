@@ -15,9 +15,11 @@ internal sealed class DatabaseCrossoverSettings
         string path = Path.Combine(AppContext.BaseDirectory, "database-test.settings.json");
         DatabaseCrossoverSettings settings = JsonSerializer.Deserialize<DatabaseCrossoverSettings>(File.ReadAllText(path))
             ?? throw new InvalidOperationException("Database test settings are empty.");
+        settings.ConnectionString = Environment.GetEnvironmentVariable("ALGOTRADING_SQL_CONNECTION_STRING")
+            ?? settings.ConnectionString;
         if (string.IsNullOrWhiteSpace(settings.ConnectionString) || string.IsNullOrWhiteSpace(settings.Timeframe)
             || string.IsNullOrWhiteSpace(settings.TimestampTimeZoneId) || settings.CandleLengthMinutes <= 0)
-            throw new InvalidOperationException("The database test requires a connection string, timeframe, candle duration and timestamp timezone.");
+            throw new InvalidOperationException("The database test requires ALGOTRADING_SQL_CONNECTION_STRING (or a local untracked setting), timeframe, candle duration and timestamp timezone.");
         return settings;
     }
 }

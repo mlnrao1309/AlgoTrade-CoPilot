@@ -10,12 +10,12 @@ namespace AlgoTrading.Services
 
         static AppConfiguration()
         {
-            string? conn = null;
+            string? conn = System.Environment.GetEnvironmentVariable("ALGOTRADING_SQL_CONNECTION_STRING");
             try
             {
                 var baseDir = AppContext.BaseDirectory;
                 var path = System.IO.Path.Combine(baseDir, "appsettings.json");
-                if (System.IO.File.Exists(path))
+                if (string.IsNullOrWhiteSpace(conn) && System.IO.File.Exists(path))
                 {
                     using var stream = System.IO.File.OpenRead(path);
                     var doc = System.Text.Json.JsonDocument.Parse(stream);
@@ -40,9 +40,7 @@ namespace AlgoTrading.Services
                 // ignore and fallback to default
             }
 
-            MsSqlDatabase = string.IsNullOrEmpty(conn)
-                ? @"Server=MANCHIKANTI\MANCHIKANTI;Database=Algo_Trading_CFCore;Trusted_Connection=True;TrustServerCertificate=True;"
-                : conn!;
+            MsSqlDatabase = conn ?? string.Empty;
         }
     }
 }

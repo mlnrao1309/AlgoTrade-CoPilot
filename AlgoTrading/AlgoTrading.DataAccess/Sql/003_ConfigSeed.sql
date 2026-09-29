@@ -25,14 +25,15 @@ WHEN NOT MATCHED THEN
 MERGE dbo.Config_CriticalLevels AS target
 USING (VALUES
     ('PIVOT_STANDARD', '1D', '1D', '{"type":"SQL_RANGE_EXTENSION_V1"}', 2, 1),
-    ('EMA_CROSSOVER', '15m', NULL, '{"fastLength":5,"slowLength":5,"function":"EMA"}', 6, 1),
-    ('SWING_REVERSAL', '15m', NULL, '{"leftBars":2,"rightBars":2}', 5, 1)
+    ('EMA_CROSSOVER', '15m', NULL, '{"fastLength":5,"slowLength":20,"function":"EMA"}', 21, 1),
+    ('SWING_REVERSAL', '15m', NULL, '{"leftBars":2,"rightBars":2}', 5, 0)
 ) AS source (MethodCode, AppliedTimeframe, ReferenceTimeframe, ParametersJson, MinimumBarsRequired, IsActive)
 ON target.MethodCode = source.MethodCode AND target.AppliedTimeframe = source.AppliedTimeframe
 WHEN MATCHED THEN
     UPDATE SET ReferenceTimeframe = source.ReferenceTimeframe,
                ParametersJson = source.ParametersJson,
-               MinimumBarsRequired = source.MinimumBarsRequired
+               MinimumBarsRequired = source.MinimumBarsRequired,
+               IsActive = CASE WHEN source.MethodCode = 'SWING_REVERSAL' THEN 0 ELSE target.IsActive END
 WHEN NOT MATCHED THEN
     INSERT (MethodCode, AppliedTimeframe, ReferenceTimeframe, ParametersJson, MinimumBarsRequired, IsActive)
     VALUES (source.MethodCode, source.AppliedTimeframe, source.ReferenceTimeframe, source.ParametersJson,

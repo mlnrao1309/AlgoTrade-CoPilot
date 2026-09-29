@@ -43,7 +43,7 @@ namespace AlgoTrading.Models
                 CompletedCandle source = sourceCandles[index];
                 ValidateSource(source, session, previousSourceClose);
                 DateTimeOffset targetStart = GetTargetStart(source.Candle.OpenedAt, duration, session);
-                DateTimeOffset targetClose = this.clock.GetCompletion(targetStart, duration, session);
+                DateTimeOffset targetClose = this.clock.GetAggregationCompletion(targetStart, duration, session);
                 if (source.ClosedAt > targetClose)
                 {
                     throw new InvalidOperationException("A source candle crosses a requested aggregation boundary; splitting it would invent prices.");
@@ -103,7 +103,7 @@ namespace AlgoTrading.Models
             {
                 throw new InvalidOperationException("The target timeframe has no duration.");
             }
-            DateTimeOffset targetClose = this.clock.GetCompletion(targetStart, optionalDuration.Value, session);
+            DateTimeOffset targetClose = this.clock.GetAggregationCompletion(targetStart, optionalDuration.Value, session);
             CompletedCandle first = group[0];
             CompletedCandle last = group[group.Count - 1];
             if (first.Candle.OpenedAt != targetStart || last.ClosedAt != targetClose)
