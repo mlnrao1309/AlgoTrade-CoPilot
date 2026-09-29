@@ -2,84 +2,85 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Background="{StaticResource PageBrush}" Foreground="{StaticResource TextBrush}" FontFamily="Segoe UI" FontSize="14"
-        Title="AlgoTrading · Rule Editor" Width="1440" Height="930" MinWidth="1150" MinHeight="650"
+        Title="AlgoTrading · Strategy Editor" Width="1500" Height="940" MinWidth="1120" MinHeight="680"
         WindowStartupLocation="CenterScreen" Closing="OnClosing">
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-        <Border BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1" Padding="26,18">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Border BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1" Padding="24,16">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                    <Button Content="New" Click="OnNew" Margin="0,0,8,0" />
-                    <Button Content="Open rule" Click="OnOpen" Margin="0,0,8,0" />
-                    <Button Content="Validate" Click="OnValidate" Margin="0,0,8,0" />
-                    <Button Content="Save rule" Click="OnSave" Style="{StaticResource PrimaryButton}" />
+                    <Button Content="New" Click="OnNew" Margin="0,0,7,0" AutomationProperties.Name="New strategy"/>
+                    <Button Content="Open" Click="OnOpen" Margin="0,0,7,0" AutomationProperties.Name="Open strategy"/>
+                    <Button Content="Validate" Click="OnValidate" Margin="0,0,7,0"/>
+                    <Button Content="Save" Click="OnSave" Margin="0,0,7,0" Style="{StaticResource PrimaryButton}"/>
+                    <Button Content="Save As" Click="OnSaveAs"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Background="#6D45C1" Width="32" Height="32" CornerRadius="7" Margin="0,0,12,0"><TextBlock Text="A" FontWeight="Bold" FontSize="19" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
-                    <TextBlock Text="ALGOTRADING" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    <TextBlock Text=" /  Rule editor" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                    <Border Background="#6D45C1" Width="32" Height="32" CornerRadius="7" Margin="0,0,12,0"><TextBlock Text="A" FontWeight="Bold" FontSize="19" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                    <TextBlock Text="ALGOTRADING" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Text=" / Strategy editor" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                 </StackPanel>
             </DockPanel>
         </Border>
-        <Grid Grid.Row="1" Margin="26,24,26,20">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="230"/><ColumnDefinition Width="230"/></Grid.ColumnDefinitions>
-            <StackPanel Margin="0,0,24,0">
-                <TextBlock Text="Strategy name" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,0,0,7" />
-                <TextBox x:Name="NameBox" FontSize="20" FontWeight="SemiBold" LostKeyboardFocus="OnNameChanged" AutomationProperties.Name="Strategy name" />
-            </StackPanel>
-            <StackPanel Grid.Column="1" Margin="0,0,20,0">
-                <TextBlock Text="Evaluate on each completed" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,0,0,7" />
-                <ContentControl x:Name="TimeframeHost" />
-            </StackPanel>
-            <Border Grid.Column="2" Background="#122A2A" BorderBrush="#24504C" BorderThickness="1" CornerRadius="8" Padding="14" VerticalAlignment="Bottom">
-                <StackPanel><TextBlock Text="●  Completed candles only" Foreground="#8EE1C2" FontSize="13" FontWeight="SemiBold" /><TextBlock Text="No forming-candle signals" Foreground="#9BBFB5" FontSize="11" Margin="0,4,0,0" /></StackPanel>
+        <Grid Grid.Row="1" Margin="24,18,24,16">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="240"/><ColumnDefinition Width="240"/></Grid.ColumnDefinitions>
+            <StackPanel Margin="0,0,20,0"><TextBlock Text="Strategy name" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,0,0,6"/><TextBox x:Name="NameBox" FontSize="19" FontWeight="SemiBold" LostKeyboardFocus="OnHeaderChanged" AutomationProperties.Name="Strategy name"/></StackPanel>
+            <StackPanel Grid.Column="1" Margin="0,0,20,0"><TextBlock Text="Evaluation timeframe" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,0,0,6"/><ContentControl x:Name="TimeframeHost"/></StackPanel>
+            <Border Grid.Column="2" Background="#122A2A" BorderBrush="#24504C" BorderThickness="1" CornerRadius="8" Padding="13" VerticalAlignment="Bottom"><StackPanel><TextBlock Text="● Completed candles only" Foreground="#8EE1C2" FontWeight="SemiBold"/><TextBlock Text="No future/forming candle option" Foreground="#9BBFB5" FontSize="11" Margin="0,3,0,0"/></StackPanel></Border>
+        </Grid>
+        <Grid Grid.Row="2" Margin="24,0,24,16">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="320"/></Grid.ColumnDefinitions>
+            <TabControl x:Name="SectionTabs" Margin="0,0,18,0" SelectionChanged="OnTabChanged">
+                <TabItem Header="Overview">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"><Grid Margin="18"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <StackPanel Grid.ColumnSpan="2" Margin="0,0,0,16"><TextBlock Text="Description"/><TextBox x:Name="DescriptionBox" AcceptsReturn="True" MinHeight="70" TextWrapping="Wrap" LostKeyboardFocus="OnSimpleFieldChanged" AutomationProperties.Name="Strategy description"/></StackPanel>
+                        <StackPanel Grid.Row="1" Margin="0,0,12,16"><TextBlock Text="Exchange"/><ComboBox x:Name="ExchangeBox" SelectionChanged="OnSimpleSelectionChanged"><ComboBoxItem Content="NSE"/><ComboBoxItem Content="BSE"/></ComboBox></StackPanel>
+                        <StackPanel Grid.Row="1" Grid.Column="1" Margin="12,0,0,16"><TextBlock Text="Segment"/><ComboBox x:Name="SegmentBox" SelectionChanged="OnSimpleSelectionChanged"><ComboBoxItem Content="Equity"/><ComboBoxItem Content="Futures"/><ComboBoxItem Content="Options"/></ComboBox></StackPanel>
+                        <StackPanel Grid.Row="2" Margin="0,0,12,16"><TextBlock Text="Instrument symbol"/><TextBox x:Name="InstrumentBox" LostKeyboardFocus="OnSimpleFieldChanged" AutomationProperties.Name="Instrument symbol"/></StackPanel>
+                        <StackPanel Grid.Row="2" Grid.Column="1" Margin="12,0,0,16"><TextBlock Text="Session"/><ComboBox x:Name="SessionBox" SelectionChanged="OnSimpleSelectionChanged"><ComboBoxItem Content="Regular"/><ComboBoxItem Content="Morning"/></ComboBox></StackPanel>
+                        <StackPanel Grid.Row="3" Margin="0,0,12,0"><TextBlock Text="Trade direction"/><ComboBox x:Name="DirectionBox" SelectionChanged="OnSimpleSelectionChanged"><ComboBoxItem Content="Long"/><ComboBoxItem Content="Short"/></ComboBox></StackPanel>
+                        <TextBlock Grid.Row="3" Grid.Column="1" Margin="12,22,0,0" Foreground="{StaticResource MutedBrush}" Text="One document targets one instrument and direction. Duplicate the file for another symbol or side—simple and explicit."/>
+                    </Grid></ScrollViewer>
+                </TabItem>
+                <TabItem Header="Entry">
+                    <Grid Margin="18"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,12"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="180"/><ColumnDefinition Width="150"/><ColumnDefinition Width="110"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <StackPanel><TextBlock Text="Reference level"/><ComboBox x:Name="LevelBox" SelectionChanged="OnSimpleSelectionChanged"><ComboBoxItem Content="None"/><ComboBoxItem Content="Daily PP"/><ComboBoxItem Content="Daily R1"/><ComboBoxItem Content="Daily S1"/><ComboBoxItem Content="Weekly PP"/><ComboBoxItem Content="Critical Support"/><ComboBoxItem Content="Critical Resistance"/></ComboBox></StackPanel>
+                            <StackPanel Grid.Column="1" Margin="12,0"><TextBlock Text="Binding name"/><TextBox x:Name="BindingBox" LostKeyboardFocus="OnSimpleFieldChanged" AutomationProperties.Name="Level binding name"/></StackPanel>
+                            <StackPanel Grid.Column="2" Margin="12,22,0,0"><CheckBox x:Name="RetestBox" Content="Require same-level retest" Checked="OnSimpleCheckChanged" Unchecked="OnSimpleCheckChanged"/></StackPanel>
+                            <StackPanel Grid.Column="3" Margin="12,0"><TextBlock Text="Window"/><TextBox x:Name="RetestWindowBox" LostKeyboardFocus="OnSimpleFieldChanged" AutomationProperties.Name="Retest window in candles"/></StackPanel>
+                            <StackPanel Grid.Column="4" Margin="12,22,0,0"><CheckBox x:Name="InvalidateBox" Content="Opposite cross invalidates setup" Checked="OnSimpleCheckChanged" Unchecked="OnSimpleCheckChanged"/></StackPanel>
+                        </Grid></Border>
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"><ContentControl x:Name="EntryHost" Margin="0,0,10,0"/></ScrollViewer>
+                    </Grid>
+                </TabItem>
+                <TabItem Header="Protection &amp; partial exits">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="18">
+                        <TextBlock Text="Initial protection" FontSize="19" FontWeight="SemiBold"/><Grid Margin="0,10,0,18"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="220"/><ColumnDefinition Width="140"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <CheckBox x:Name="ProtectionEnabledBox" Content="Enabled" Checked="OnSimpleCheckChanged" Unchecked="OnSimpleCheckChanged" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="StopModeBox" Grid.Column="1" Margin="10,0" SelectionChanged="OnSimpleSelectionChanged"><ComboBoxItem Content="Fixed percent"/><ComboBoxItem Content="Fixed points"/><ComboBoxItem Content="Reference level"/></ComboBox>
+                            <TextBox x:Name="StopValueBox" Grid.Column="2" Margin="10,0" LostKeyboardFocus="OnSimpleFieldChanged" AutomationProperties.Name="Stop value"/>
+                            <TextBox x:Name="StopReferenceBox" Grid.Column="3" Margin="10,0,0,0" LostKeyboardFocus="OnSimpleFieldChanged" AutomationProperties.Name="Stop reference"/>
+                        </Grid>
+                        <TextBlock Text="If fresh reference data is missing, an existing position keeps its last valid protective stop." Foreground="{StaticResource MutedBrush}" Margin="0,0,0,20"/>
+                        <DockPanel Margin="0,0,0,8"><StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button Content="Add stage" Click="OnAddStage" Margin="0,0,6,0"/><Button Content="Remove selected" Click="OnRemoveStage"/></StackPanel><TextBlock Text="Ordered partial exits" FontSize="19" FontWeight="SemiBold" VerticalAlignment="Center"/></DockPanel>
+                        <DataGrid x:Name="PartialExitGrid" AutoGenerateColumns="False" CanUserAddRows="False" HeadersVisibility="Column" MinHeight="220" CellEditEnding="OnStageEdited" SelectionMode="Single">
+                            <DataGrid.Columns><DataGridCheckBoxColumn Header="On" Binding="{Binding Enabled}" Width="45"/><DataGridTextColumn Header="Label" Binding="{Binding Label}" Width="*"/><DataGridTextColumn Header="Quantity %" Binding="{Binding QuantityPercent}" Width="100"/><DataGridComboBoxColumn Header="Basis" SelectedItemBinding="{Binding QuantityBasis}" ItemsSource="{Binding DataContext.QuantityBases, RelativeSource={RelativeSource AncestorType=Window}}" Width="120"/><DataGridTextColumn Header="Target / reference" Binding="{Binding Target}" Width="*"/></DataGrid.Columns>
+                        </DataGrid>
+                        <TextBlock Text="Original = percentage of the entry fill. Remaining = percentage of what is still open when this stage triggers." Foreground="{StaticResource MutedBrush}" Margin="0,8,0,0"/>
+                    </StackPanel></ScrollViewer>
+                </TabItem>
+                <TabItem Header="Full exit"><Grid Margin="18"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="When this condition matches, close all remaining quantity." Foreground="{StaticResource MutedBrush}" Margin="0,0,0,12"/><ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"><ContentControl x:Name="FullExitHost" Margin="0,0,10,0"/></ScrollViewer></Grid></TabItem>
+                <TabItem Header="Execution &amp; summary"><ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="18"><TextBlock Text="Execution policy" FontSize="19" FontWeight="SemiBold"/><Grid Margin="0,10,0,20"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0"><TextBlock Text="Stop/target collision"/><ComboBox x:Name="PriorityBox" SelectionChanged="OnSimpleSelectionChanged"><ComboBoxItem Content="Stop first"/><ComboBoxItem Content="Target first"/></ComboBox></StackPanel>
+                    <StackPanel Grid.Column="1" Margin="8,0"><TextBlock Text="Same-candle actions"/><ComboBox x:Name="ActionBox" SelectionChanged="OnSimpleSelectionChanged"><ComboBoxItem Content="One exit action"/><ComboBoxItem Content="All eligible exits"/></ComboBox></StackPanel>
+                    <StackPanel Grid.Column="2" Margin="8,0,0,0"><TextBlock Text="Re-entry"/><ComboBox x:Name="ReEntryBox" SelectionChanged="OnSimpleSelectionChanged"><ComboBoxItem Content="Next setup"/><ComboBoxItem Content="Disabled"/></ComboBox></StackPanel>
+                </Grid><TextBlock Text="Strategy explanation" FontSize="19" FontWeight="SemiBold"/><TextBox x:Name="SummaryBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="420" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Strategy explanation"/></StackPanel></ScrollViewer></TabItem>
+            </TabControl>
+            <Border Grid.Column="1" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="18">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel><DockPanel><StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button x:Name="UndoButton" Content="Undo" Click="OnUndo" Margin="0,0,5,0" Padding="8,5"/><Button x:Name="RedoButton" Content="Redo" Click="OnRedo" Padding="8,5"/></StackPanel><TextBlock Text="STRATEGY CHECK" Foreground="{StaticResource MutedBrush}" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center"/></DockPanel><TextBlock x:Name="ValidationTitle" FontSize="21" FontWeight="SemiBold" Margin="0,14,0,8"/><TextBlock x:Name="ValidationMessage" FontSize="13"/><Border Background="{StaticResource LineBrush}" Height="1" Margin="0,18"/><TextBlock Text="Runtime handoff" FontWeight="SemiBold"/><TextBlock x:Name="RuntimeText" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,7,0,0"/></StackPanel></ScrollViewer>
             </Border>
         </Grid>
-        <Grid Grid.Row="2" Margin="26,0,26,18">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="300"/></Grid.ColumnDefinitions>
-            <Grid Margin="0,0,22,0">
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                <DockPanel Margin="0,0,0,12">
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <Button x:Name="UndoButton" Content="Undo" Click="OnUndo" Margin="0,0,6,0" Padding="10,5" />
-                        <Button x:Name="RedoButton" Content="Redo" Click="OnRedo" Padding="10,5" />
-                    </StackPanel>
-                    <TextBlock Text="Conditions" FontSize="21" FontWeight="SemiBold" VerticalAlignment="Center" />
-                </DockPanel>
-                <ScrollViewer x:Name="RuleScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <ContentControl x:Name="EditorHost" Margin="0,0,12,0" />
-                </ScrollViewer>
-            </Grid>
-            <Border Grid.Column="1" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="20">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel>
-                        <TextBlock Text="RULE CHECK" Foreground="{StaticResource MutedBrush}" FontWeight="SemiBold" FontSize="11" />
-                        <TextBlock x:Name="ValidationTitle" FontSize="21" FontWeight="SemiBold" Margin="0,9,0,8" />
-                        <TextBlock x:Name="ValidationMessage" FontSize="13" Margin="0,0,0,20" />
-                        <Border Background="{StaticResource LineBrush}" Height="1" Margin="0,0,0,18" />
-                        <TextBlock Text="Timeframes used" FontSize="13" FontWeight="SemiBold" />
-                        <TextBlock x:Name="TimeframesText" Foreground="{StaticResource MutedBrush}" FontSize="13" Margin="0,6,0,20" />
-                        <TextBlock Text="Read your rule" FontSize="15" FontWeight="SemiBold" />
-                        <TextBlock x:Name="PreviewText" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,10,0,20" />
-                        <Border Background="{StaticResource LineBrush}" Height="1" Margin="0,0,0,18" />
-                        <TextBlock Text="Building a nested calculation" FontSize="13" FontWeight="SemiBold" />
-                        <TextBlock Text="Select a value, choose Indicator, then edit its Source to use another indicator or calculation." Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,8,0,16" />
-                        <TextBlock Text="Crossovers compare both the previous and current completed candle. Different timeframes align by their closing timestamps." Foreground="{StaticResource MutedBrush}" FontSize="12" />
-                    </StackPanel>
-                </ScrollViewer>
-            </Border>
-        </Grid>
-        <Border Grid.Row="3" Background="#101827" Padding="26,10" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0">
-            <DockPanel>
-                <Button Content="Load breakout example" Click="OnLoadExample" DockPanel.Dock="Right" Padding="8,4" FontSize="12" />
-                <TextBlock x:Name="StatusText" Text="Unsaved example · Select any value to edit it." Foreground="{StaticResource MutedBrush}" FontSize="12" VerticalAlignment="Center" />
-            </DockPanel>
-        </Border>
+        <Border Grid.Row="3" Background="#101827" Padding="24,9" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0"><TextBlock x:Name="StatusText" Text="Ready" Foreground="{StaticResource MutedBrush}" FontSize="12"/></Border>
     </Grid>
 </Window>
-

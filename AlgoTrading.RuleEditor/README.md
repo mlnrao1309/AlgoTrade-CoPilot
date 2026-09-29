@@ -1,62 +1,62 @@
-# AlgoTrading Rule Editor
+# AlgoTrading Strategy Editor
 
-A separate Windows desktop project for visually authoring strategy rules. It references the existing AlgoTrading.Models project. No database connections or order execution are included.
+This is the deliberately small, personal-trader strategy authoring application. It uses the existing nested condition editor and the shared `AlgoTrading.Models` rule binder; it does not create a second expression language or store runtime state in strategy files.
 
-## Open and debug
+## Run
 
-Open AlgoTrading.RuleEditor.slnx in Visual Studio and set AlgoTrading.RuleEditor as the startup project. The project targets .NET 10 for Windows with Windows Presentation Foundation. It needs no additional NuGet packages.
+The deployment is framework-dependent and requires the .NET 10 Desktop Runtime on Windows. Start `AlgoTrading.RuleEditor.exe`.
 
-Expected folders:
+## Authoring workflow
 
-    D:\MyWorkspace\AlgoTrading.RuleEditor
-    D:\MyWorkspace\AlgoTrading\AlgoTrading.Models
+1. In **Overview**, enter one exchange, segment, instrument, session, and trade direction.
+2. In **Entry**, author the nested condition tree. Optionally select a regular pivot or Critical Support/Resistance level. A binding name preserves the identity of the selected level across the retest sequence; equal-priced origins are not interchangeable.
+3. In **Protection & partial exits**, configure the initial stop and ordered partial exits. `Original` means a percentage of the entry fill. `Remaining` means a percentage of the still-open position when the stage triggers.
+4. In **Full exit**, author the condition that closes all remaining quantity.
+5. In **Execution & summary**, select collision/re-entry behavior and review the generated explanation.
+6. Select **Validate**, then **Save**. Files use the `.strategy.json` extension.
 
-From the editor project directory:
+The editor evaluates rules on completed candles only. It intentionally exposes no forming/future-candle option.
 
-    dotnet build AlgoTrading.RuleEditor.csproj
-    dotnet run --project AlgoTrading.RuleEditor.csproj
+## Files, compatibility, and safety
 
-## Use the editor
+- Full strategies use schema version `1`. Unsupported versions fail with a clear message; there is no internal version tree.
+- A legacy single-rule JSON file can be opened. It is imported into a new unsaved strategy, leaving the original untouched. Complete the missing instrument, protection, and exit settings before saving.
+- Read-only files open in read-only mode and save to a new path.
+- Save detects an external file change and refuses to overwrite it; use Save As to preserve both copies.
+- Undo/redo is deterministic and bounded to 50 complete strategy snapshots.
+- Runtime state, orders, fills, positions, credentials, and connection strings are never persisted in strategy JSON.
 
-1. Choose New for a blank rule, or use the included moving-average breakout example.
-2. Name the strategy and select the completed-candle evaluation timeframe.
-3. Add condition rows and nested groups. Groups can match All, Any, or None of their enabled children.
-4. Select either value in a row. Choose a candle field, number, indicator, calculation, rounded value, previous value or count.
-5. To nest indicators, choose Indicator and edit Source. Repeat as needed. For example, the source of a Simple Moving Average can be a Relative Strength Index.
-6. Choose an ordinary comparison or crossed above / crossed below between the two values.
-7. Use the arrows to reorder, Duplicate to copy, Comment to add a note, and Enabled to omit a condition temporarily. Undo and Redo restore whole-document edits.
-8. Validate and read the summary. Save rule writes the existing AlgoTrading.Models RuleDefinition JSON format. Open rule reads that same format, including the earlier database test's rule.json.
+## Runtime handoff
 
-Changing the evaluation clock does not silently change each indicator's timeframe. Each indicator retains its own selection. Changing an indicator's own timeframe also moves a direct candle source that used the same old timeframe; separately configured nested sources retain their timeframes.
+`Services/StrategyRuntimeAdapter.cs` is the stable non-UI boundary. `Load(json)`:
 
-Value dialogs edit independent copies. Apply commits the change; Cancel leaves the rule unchanged. A Count expression opens a condition editor for the condition being counted. Numeric entry uses a dot as the decimal separator. No forming-candle evaluation option is exposed.
+- rejects legacy, unsupported, incomplete, or invalid documents;
+- binds entry and full-exit condition trees through the shared runtime;
+- returns a deep-copied immutable-in-practice snapshot so later editor changes cannot modify a running strategy;
+- retains protection, partial-exit, level/retest, and execution-policy metadata for the position/execution coordinator.
 
-The editor supports the indicators already implemented by AlgoTrading.Models. It does not claim complete Chartink feature parity: exchange segment selection, a stock universe, pivot-specific selections, live scanning and broker/order controls are not part of this project. Timeframe keys describe the required data; the strategy data provider must supply those series. The editor does not manufacture unavailable timeframes.
+The runtime remains responsible for resolving an instrument, market data, pivot/critical-level providers, position quantities, orders, and fills. The editor does not pretend that unavailable data exists.
 
-## Classical code layout
+## Validation messages
 
-Every new class and enumeration has its own file. Editable models use explicit fields, constructors and property accessors. Event handlers and helper methods are named, with ordinary block bodies. There are no records, primary constructors, lambdas, anonymous methods, local functions, expression-bodied members, target-typed construction, object initializer expressions, collection-expression shorthand, implicit local types or conditional-expression shorthand in the authored C# source.
-
-The referenced AlgoTrading.Models library already contains records and other compact syntax. Those existing files are not rewritten. RuleDocumentAdapter is the explicit serialization boundary between the editor's classical mutable classes and the library's immutable rule definitions; this preserves Enabled and Comment without introducing initializer shorthand in the editor.
-
-Useful debugging locations:
-
-- Windows/MainWindow.xaml.cs: new/open/save, validation and document-level undo/redo.
-- Controls/ConditionEditorControl.cs: condition rows and nested groups.
-- Windows/ValueEditorWindow.xaml.cs: numeric fields and nested indicator/calculation inputs.
-- Windows/ConditionEditorWindow.xaml.cs: conditions inside Count.
-- Services/RuleDocumentAdapter.cs: conversion to and from the shared rule definitions.
-- Services/EditorHistory.cs: independent document snapshots.
-- Verification/EditorVerification.cs: deterministic checks for serialization, validation and execution.
-
-Generated WPF files under obj and the referenced library follow their own code-generation/style conventions. They are not authored editor source.
+Messages identify their strategy path, such as `Entry`, `Protection.Value`, or `PartialExits[0].QuantityPercent`. A blocked Save means the document is incomplete or cannot bind to the shared runtime. Corrupt files show the file path and serializer diagnostic.
 
 ## Verification
 
-Run the application with the verification argument and an absolute report path:
+Run:
 
-    AlgoTrading.RuleEditor.exe --verify C:\path\editor-verification.txt
+```powershell
+dotnet build AlgoTrading.RuleEditor.csproj --no-restore
+dotnet .\bin\Debug\net10.0-windows\AlgoTrading.RuleEditor.dll --verify editor-verification.txt
+```
 
-The command runs without opening the editor, writes a report and returns a nonzero exit code on failure. The checks include all seven value types, nested indicator discovery, group negation, comments, unavailable rules, independent copies, undo/redo and execution on completed candles through the referenced library.
+The verification covers the original rule/value/group/execution checks plus full-strategy round trip, legacy import, unsupported-version rejection, partial-exit quantity bases, validation, runtime snapshot isolation, and strategy-level undo.
 
-Undo retains up to one hundred document edits. Saving requires a valid executable rule; incomplete groups remain editable but cannot be saved as executable definitions. A future strategy engine can read a saved file with RuleDefinitionJson.Deserialize and bind it through RuleBinder.Bind.
+## Explicit non-goals
+
+- No broker order placement inside the editor.
+- No profitability claim or embedded backtest engine.
+- No automatic market-data creation.
+- No hidden future/forming-candle evaluation.
+- No multi-user approval workflow, database document-version tree, or institutional deployment infrastructure.
+- No silent “nearest level” behavior.

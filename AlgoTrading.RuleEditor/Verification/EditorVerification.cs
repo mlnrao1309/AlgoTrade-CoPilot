@@ -33,7 +33,42 @@ namespace AlgoTrading.RuleEditor.Verification
             VerifyGroups(adapter);
             VerifyHistory(example);
             VerifyExecution(adapter);
+            VerifyStrategyDocuments();
             File.WriteAllText(reportPath, "Passed " + _assertions + " editor verification assertions.");
+        }
+
+        private void VerifyStrategyDocuments()
+        {
+            StrategyDocumentService documents = new StrategyDocumentService();
+            StrategyDocument strategy = documents.CreateBlank();
+            strategy.Name = "Verification strategy";
+            strategy.Instrument = "TEST";
+            strategy.LevelSelection = "Critical Resistance";
+            strategy.LevelBinding = "breakout-level";
+            strategy.RetestRequired = true;
+            strategy.PartialExits.Add(new PartialExitStage { Label = "First", QuantityPercent = 50m, QuantityBasis = "Original", Target = "1R" });
+            strategy.PartialExits.Add(new PartialExitStage { Label = "Second", QuantityPercent = 80m, QuantityBasis = "Remaining", Target = "2R" });
+            string json = documents.Serialize(strategy);
+            StrategyDocument restored = documents.Deserialize(json, out bool importedLegacy);
+            Assert(!importedLegacy, "A strategy document is not mistaken for a legacy rule.");
+            Assert(documents.Serialize(restored) == json, "A complete strategy round-trips without changing its JSON meaning.");
+            Assert(restored.PartialExits[0].QuantityBasis == "Original" && restored.PartialExits[1].QuantityBasis == "Remaining", "Partial-exit quantity bases remain distinct.");
+            Assert(documents.Validate(restored).Count == 0, "A complete strategy passes authoring validation.");
+            StrategyRuntimeSnapshot snapshot = new StrategyRuntimeAdapter().Load(json);
+            restored.Name = "Changed after load";
+            Assert(snapshot.Document.Name == "Verification strategy", "Runtime snapshots are independent from editor changes.");
+            string legacy = RuleDefinitionJson.Serialize(new RuleDocumentAdapter().ToDefinition(EditorExamples.MovingAverageBreakout()));
+            StrategyDocument imported = documents.Deserialize(legacy, out importedLegacy);
+            Assert(importedLegacy && imported.Entry.Children.Count > 0, "Legacy single-rule JSON imports without changing the original.");
+            bool rejected = false;
+            try { documents.Deserialize("{\"SchemaVersion\":99}", out importedLegacy); }
+            catch (NotSupportedException) { rejected = true; }
+            Assert(rejected, "Unsupported strategy versions fail explicitly.");
+            StrategyHistory history = new StrategyHistory();
+            history.Remember(strategy);
+            StrategyDocument changed = EditorCopyService.Copy(strategy);
+            changed.PartialExits[0].QuantityPercent = 25m;
+            Assert(history.Undo(changed).PartialExits[0].QuantityPercent == 50m, "Undo covers strategy-level partial exits.");
         }
 
         private void VerifyValueKinds(RuleDocumentAdapter adapter)
